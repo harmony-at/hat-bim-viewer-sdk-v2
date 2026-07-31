@@ -1,11 +1,11 @@
 /**
  * xeokit-sdk v2.6.112
- *  Commit: 2ce58020bcf3e4af1f68e47009f413c448a8a2a4
- *  Built: 2026-06-25T15:09:42.607Z
+ *  Commit: efbfed3539a700c5404e199be74181a5b9433fc5
+ *  Built: 2026-07-31T08:59:13.920Z
  */
 
 if (typeof window !== 'undefined') {
-    window.__XEOKIT__ = { version: '2.6.112', commit: '2ce58020bcf3e4af1f68e47009f413c448a8a2a4', built: '2026-06-25T15:09:42.607Z' };
+    window.__XEOKIT__ = { version: '2.6.112', commit: 'efbfed3539a700c5404e199be74181a5b9433fc5', built: '2026-07-31T08:59:13.920Z' };
 }
 
 'use strict';
@@ -54990,6 +54990,8 @@ class Scene extends Component {
             transparent: transparent,
             alphaDepthMask: alphaDepthMask
         });
+
+        this.canvas._renderer = this._renderer;
 
         this._sectionPlanesState = new (function () {
 
@@ -127372,30 +127374,30 @@ class XKTLoaderPlugin extends Plugin {
 
         const modelId = sceneModel.id;  // In case ID was auto-generated
 
-        const loadIntoMetaScene = (! ("loadIntoMetaScene" in params)) || params.loadIntoMetaScene;
+        const loadIntoMetaScene = (!("loadIntoMetaScene" in params)) || params.loadIntoMetaScene;
         const metaModel = (loadIntoMetaScene
-                           ? new MetaModel({
-                               id: modelId,
-                               metaScene: this.viewer.metaScene
-                           })
-                           : (function() {
-                               let firstMetadata = null;
-                               let modelMetadata = null;
-                               return {
-                                   loadData: metadata => {
-                                       if (! firstMetadata) {
-                                           firstMetadata = metadata;
-                                       } else {
-                                           if (! modelMetadata) {
-                                               modelMetadata = { };
-                                               Object.entries(firstMetadata).forEach(([ k, v ]) => modelMetadata[k] = Array.isArray(v) ? v.slice(0) : v);
-                                           }
-                                           Object.entries(metadata).forEach(([ k, v ]) => { if (Array.isArray(v)) { v.forEach(e => modelMetadata[k].push(e)); } });
-                                       }
-                                   },
-                                   finalize: () => sceneModel.metadata = modelMetadata || firstMetadata
-                               };
-                           })());
+            ? new MetaModel({
+                id: modelId,
+                metaScene: this.viewer.metaScene
+            })
+            : (function () {
+                let firstMetadata = null;
+                let modelMetadata = null;
+                return {
+                    loadData: metadata => {
+                        if (!firstMetadata) {
+                            firstMetadata = metadata;
+                        } else {
+                            if (!modelMetadata) {
+                                modelMetadata = {};
+                                Object.entries(firstMetadata).forEach(([k, v]) => modelMetadata[k] = Array.isArray(v) ? v.slice(0) : v);
+                            }
+                            Object.entries(metadata).forEach(([k, v]) => { if (Array.isArray(v)) { v.forEach(e => modelMetadata[k].push(e)); } });
+                        }
+                    },
+                    finalize: () => sceneModel.metadata = modelMetadata || firstMetadata
+                };
+            })());
 
         this.viewer.scene.canvas.spinner.processes++;
 
@@ -127550,6 +127552,15 @@ class XKTLoaderPlugin extends Plugin {
                         loadJSONs(metaModelFiles, () => {
                             loadXKTs_excludeTheirMetaModels(xktFiles, finish, error);
                         }, error);
+                    } else if (params.metadataSrc) {
+                        this._dataSource.getMetaModel(params.metadataSrc, (metaModelData) => {
+                            metaModel.loadData(metaModelData, {
+                                includeTypes: includeTypes,
+                                excludeTypes: excludeTypes,
+                                globalizeObjectIds: options.globalizeObjectIds
+                            });
+                            loadXKTs_excludeTheirMetaModels(xktFiles, finish, error);
+                        }, error);
                     } else {
                         loadXKTs_includeTheirMetaModels(xktFiles, finish, error);
                     }
@@ -127566,6 +127577,15 @@ class XKTLoaderPlugin extends Plugin {
                         const metaModelFiles = manifestData.metaModelFiles;
                         if (metaModelFiles) {
                             loadJSONs(metaModelFiles, () => {
+                                loadXKTs_excludeTheirMetaModels(xktFiles, finish, error);
+                            }, error);
+                        } else if (params.metadataSrc) {
+                            this._dataSource.getMetaModel(params.metadataSrc, (metaModelData) => {
+                                metaModel.loadData(metaModelData, {
+                                    includeTypes: includeTypes,
+                                    excludeTypes: excludeTypes,
+                                    globalizeObjectIds: options.globalizeObjectIds
+                                });
                                 loadXKTs_excludeTheirMetaModels(xktFiles, finish, error);
                             }, error);
                         } else {
