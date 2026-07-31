@@ -1,22 +1,22 @@
-import {utils} from "../../viewer/scene/utils.js"
-import {SceneModel} from "../../viewer/scene/model/index.js";
-import {MetaModel} from "../../viewer/metadata/MetaModel.js";
-import {Plugin} from "../../viewer/Plugin.js";
-import {XKTDefaultDataSource} from "./XKTDefaultDataSource.js";
-import {IFCObjectDefaults} from "../../viewer/metadata/IFCObjectDefaults.js";
+import { utils } from "../../viewer/scene/utils.js"
+import { SceneModel } from "../../viewer/scene/model/index.js";
+import { MetaModel } from "../../viewer/metadata/MetaModel.js";
+import { Plugin } from "../../viewer/Plugin.js";
+import { XKTDefaultDataSource } from "./XKTDefaultDataSource.js";
+import { IFCObjectDefaults } from "../../viewer/metadata/IFCObjectDefaults.js";
 
-import {ParserV1} from "./parsers/ParserV1.js";
-import {ParserV2} from "./parsers/ParserV2.js";
-import {ParserV3} from "./parsers/ParserV3.js";
-import {ParserV4} from "./parsers/ParserV4.js";
-import {ParserV5} from "./parsers/ParserV5.js";
-import {ParserV6} from "./parsers/ParserV6.js";
-import {ParserV7} from "./parsers/ParserV7.js";
-import {ParserV8} from "./parsers/ParserV8.js";
-import {ParserV9} from "./parsers/ParserV9.js";
-import {ParserV10} from "./parsers/ParserV10.js";
-import {ParserV11} from "./parsers/ParserV11.js";
-import {ParserV12} from './parsers/ParserV12.js';
+import { ParserV1 } from "./parsers/ParserV1.js";
+import { ParserV2 } from "./parsers/ParserV2.js";
+import { ParserV3 } from "./parsers/ParserV3.js";
+import { ParserV4 } from "./parsers/ParserV4.js";
+import { ParserV5 } from "./parsers/ParserV5.js";
+import { ParserV6 } from "./parsers/ParserV6.js";
+import { ParserV7 } from "./parsers/ParserV7.js";
+import { ParserV8 } from "./parsers/ParserV8.js";
+import { ParserV9 } from "./parsers/ParserV9.js";
+import { ParserV10 } from "./parsers/ParserV10.js";
+import { ParserV11 } from "./parsers/ParserV11.js";
+import { ParserV12 } from './parsers/ParserV12.js';
 
 
 const parsers = {};
@@ -993,30 +993,30 @@ class XKTLoaderPlugin extends Plugin {
 
         const modelId = sceneModel.id;  // In case ID was auto-generated
 
-        const loadIntoMetaScene = (! ("loadIntoMetaScene" in params)) || params.loadIntoMetaScene;
+        const loadIntoMetaScene = (!("loadIntoMetaScene" in params)) || params.loadIntoMetaScene;
         const metaModel = (loadIntoMetaScene
-                           ? new MetaModel({
-                               id: modelId,
-                               metaScene: this.viewer.metaScene
-                           })
-                           : (function() {
-                               let firstMetadata = null;
-                               let modelMetadata = null;
-                               return {
-                                   loadData: metadata => {
-                                       if (! firstMetadata) {
-                                           firstMetadata = metadata;
-                                       } else {
-                                           if (! modelMetadata) {
-                                               modelMetadata = { };
-                                               Object.entries(firstMetadata).forEach(([ k, v ]) => modelMetadata[k] = Array.isArray(v) ? v.slice(0) : v);
-                                           }
-                                           Object.entries(metadata).forEach(([ k, v ]) => { if (Array.isArray(v)) { v.forEach(e => modelMetadata[k].push(e)); } });
-                                       }
-                                   },
-                                   finalize: () => sceneModel.metadata = modelMetadata || firstMetadata
-                               };
-                           })());
+            ? new MetaModel({
+                id: modelId,
+                metaScene: this.viewer.metaScene
+            })
+            : (function () {
+                let firstMetadata = null;
+                let modelMetadata = null;
+                return {
+                    loadData: metadata => {
+                        if (!firstMetadata) {
+                            firstMetadata = metadata;
+                        } else {
+                            if (!modelMetadata) {
+                                modelMetadata = {};
+                                Object.entries(firstMetadata).forEach(([k, v]) => modelMetadata[k] = Array.isArray(v) ? v.slice(0) : v);
+                            }
+                            Object.entries(metadata).forEach(([k, v]) => { if (Array.isArray(v)) { v.forEach(e => modelMetadata[k].push(e)); } });
+                        }
+                    },
+                    finalize: () => sceneModel.metadata = modelMetadata || firstMetadata
+                };
+            })());
 
         this.viewer.scene.canvas.spinner.processes++;
 
@@ -1171,6 +1171,15 @@ class XKTLoaderPlugin extends Plugin {
                         loadJSONs(metaModelFiles, () => {
                             loadXKTs_excludeTheirMetaModels(xktFiles, finish, error);
                         }, error);
+                    } else if (params.metadataSrc) {
+                        this._dataSource.getMetaModel(params.metadataSrc, (metaModelData) => {
+                            metaModel.loadData(metaModelData, {
+                                includeTypes: includeTypes,
+                                excludeTypes: excludeTypes,
+                                globalizeObjectIds: options.globalizeObjectIds
+                            });
+                            loadXKTs_excludeTheirMetaModels(xktFiles, finish, error);
+                        }, error);
                     } else {
                         loadXKTs_includeTheirMetaModels(xktFiles, finish, error);
                     }
@@ -1187,6 +1196,15 @@ class XKTLoaderPlugin extends Plugin {
                         const metaModelFiles = manifestData.metaModelFiles;
                         if (metaModelFiles) {
                             loadJSONs(metaModelFiles, () => {
+                                loadXKTs_excludeTheirMetaModels(xktFiles, finish, error);
+                            }, error);
+                        } else if (params.metadataSrc) {
+                            this._dataSource.getMetaModel(params.metadataSrc, (metaModelData) => {
+                                metaModel.loadData(metaModelData, {
+                                    includeTypes: includeTypes,
+                                    excludeTypes: excludeTypes,
+                                    globalizeObjectIds: options.globalizeObjectIds
+                                });
                                 loadXKTs_excludeTheirMetaModels(xktFiles, finish, error);
                             }, error);
                         } else {
@@ -1251,4 +1269,4 @@ function getBaseDirectory(filePath) {
     return pathArray.join('/') + '/';
 }
 
-export {XKTLoaderPlugin}
+export { XKTLoaderPlugin }
