@@ -24,6 +24,7 @@ class TouchPanRotateAndDollyHandler {
 
         const pickController = controllers.pickController;
         const pivotController = controllers.pivotController;
+        const navigationContextController = controllers.navigationContextController;
 
         const tapStartCanvasPos = math.vec2();
         const tapCanvasPos0 = math.vec2();
@@ -74,7 +75,7 @@ class TouchPanRotateAndDollyHandler {
 
                         if (pickController.picked && pickController.pickedSurface && pickController.pickResult && pickController.pickResult.worldPos) {
 
-                            pivotController.setPivotPos(pickController.pickResult.worldPos);
+                            navigationContextController.establishNavigationPivot(pickController.pickResult.worldPos, "orbit", pickController.pickResult);
 
                             if (!configs.firstPerson && pivotController.startPivot()) {
                                 pivotController.showPivot();
@@ -236,6 +237,7 @@ class TouchPanRotateAndDollyHandler {
                 const dollyDelta = (d2 - d1) * configs.touchDollyRate;
 
                 updates.dollyDelta = dollyDelta;
+                updates.dollyInputSource = "touch";
                 states.followPointerDirty = true; // Added to fix XCD-386: The zoom speed slows down when zooming into an empty space for the first time on a relatively large model, and it cannot be reset without reloading
 
                 if (Math.abs(dollyDelta) < 1.0) {

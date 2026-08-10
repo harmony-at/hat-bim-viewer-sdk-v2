@@ -45,6 +45,7 @@ class TouchPickHandler {
         const canvas = this._scene.canvas.canvas;
 
         const flyCameraTo = (pickResult) => {
+            controllers.navigationContextController.reset("camera-flight");
             let pos;
             if (pickResult && pickResult.worldPos) {
                 pos = pickResult.worldPos

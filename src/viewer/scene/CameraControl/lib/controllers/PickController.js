@@ -186,6 +186,25 @@ class PickController {
         this.schedulePickSurface = false;
     }
 
+    /**
+     * Immediately surface-picks for a new navigation gesture.
+     *
+     * This intentionally bypasses hover-result caching because scene state may
+     * have changed while the pointer remained at the same canvas position.
+     *
+     * @private
+     */
+    pickSurface(canvasPos) {
+        if (!this._configs.pointerEnabled) {
+            return null;
+        }
+        return this._scene.pick({
+            pickSurface: true,
+            pickSurfaceNormal: false,
+            canvasPos
+        });
+    }
+
     fireEvents() {
 
         if (this._needFireEvents === 0) {

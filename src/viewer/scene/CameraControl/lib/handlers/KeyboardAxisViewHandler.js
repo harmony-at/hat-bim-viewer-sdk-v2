@@ -91,9 +91,9 @@ class KeyboardAxisViewHandler {
                 tempCameraTarget.up.set(math.normalizeVec3(math.mulVec3Scalar(camera.worldForward, -1, tempVec3b)));
             }
 
-            if ((!configs.firstPerson) && configs.followPointer) {
-                controllers.pivotController.setPivotPos(center);
-            }
+            controllers.navigationContextController.reset("axis-view");
+            controllers.pivotController.endPivot();
+            controllers.pivotController.hidePivot();
 
             if (controllers.cameraFlight.duration > 0) {
                 controllers.cameraFlight.flyTo(tempCameraTarget, () => {

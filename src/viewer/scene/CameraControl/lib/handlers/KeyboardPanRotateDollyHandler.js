@@ -120,6 +120,7 @@ class KeyboardPanRotateDollyHandler {
                     } else if (dollyBackwards) {
                         updates.dollyDelta += dollyDelta;
                     }
+                    updates.dollyInputSource = "keyboard";
 
                     if (mouseMovedSinceLastKeyboardDolly) {
                         states.followPointerDirty = true;

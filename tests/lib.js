@@ -1,6 +1,5 @@
 import percySnapshot from "@percy/playwright";
 import { test, expect } from "@playwright/test";
-import "dotenv/config";
 
 const isLocal = process.env.PLAYWRIGHT_LOCAL && (process.env.PLAYWRIGHT_LOCAL !== "0");
 

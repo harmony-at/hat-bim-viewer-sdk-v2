@@ -1,0 +1,1448 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>CameraControl Navigation Context Harness</title>
+</head>
+<body>
+<script type="module">
+    import {
+        computeZoomDelta,
+        normalizeWheelDelta,
+        WHEEL_SESSION_GAP_MS
+    } from "../src/viewer/scene/CameraControl/lib/NavigationUtils.js";
+    import {NavigationContextController} from "../src/viewer/scene/CameraControl/lib/controllers/NavigationContextController.js";
+    import {MousePanRotateDollyHandler} from "../src/viewer/scene/CameraControl/lib/handlers/MousePanRotateDollyHandler.js";
+    import {CameraUpdater} from "../src/viewer/scene/CameraControl/lib/CameraUpdater.js";
+    import {MousePickHandler} from "../src/viewer/scene/CameraControl/lib/handlers/MousePickHandler.js";
+    import {KeyboardAxisViewHandler} from "../src/viewer/scene/CameraControl/lib/handlers/KeyboardAxisViewHandler.js";
+    import {CameraControl} from "../src/viewer/scene/CameraControl/CameraControl.js";
+    import {PanController} from "../src/viewer/scene/CameraControl/lib/controllers/PanController.js";
+    import {math} from "../src/viewer/scene/math/math.js";
+
+    class FakeScene {
+        constructor() {
+            const eye = [0, 0, 0];
+            const look = [0, 0, -10];
+            this.camera = {
+                eye,
+                look,
+                projection: "perspective",
+                viewMatrix: math.lookAtMat4v(eye, look, [0, 1, 0], math.mat4()),
+                projMatrix: math.perspectiveMat4(60 * Math.PI / 180, 1000 / 800, 0.1, 1000, math.mat4()),
+                projectWorldPos: (worldPos) => [500 + worldPos[0] * 100, 400 - worldPos[1] * 100]
+            };
+            this.canvas = {canvas: {clientWidth: 1000, clientHeight: 800}};
+            this.numVisibleObjects = 0;
+            this.visibleObjectIds = [];
+            this.sectionPlanes = {};
+            this.objects = {};
+            this._aabb = null;
+            this.aabbReadCount = 0;
+            this._events = {};
+        }
+
+        getAABB() {
+            this.aabbReadCount++;
+            return this._aabb;
+        }
+
+        on(name, callback) {
+            const handle = {name, callback};
+            (this._events[name] || (this._events[name] = [])).push(handle);
+            return handle;
+        }
+
+        off(handle) {
+            const handles = this._events[handle.name] || [];
+            const index = handles.indexOf(handle);
+            if (index >= 0) {
+                handles.splice(index, 1);
+            }
+        }
+
+        fire(name, value) {
+            for (const handle of this._events[name] || []) {
+                handle.callback(value);
+            }
+        }
+    }
+
+    class FakePickController {
+        constructor(results = []) {
+            this.results = results;
+            this.pickCount = 0;
+        }
+
+        pickSurface() {
+            this.pickCount++;
+            return this.results.shift() || null;
+        }
+    }
+
+    class FakePivotController {
+        setPivotPos(worldPos) {
+            this.worldPos = Array.from(worldPos);
+        }
+    }
+
+    function makeHarness(results = []) {
+        const scene = new FakeScene();
+        for (const result of results) {
+            if (result && result.entity) {
+                scene.objects[result.entity.id] = result.entity;
+            }
+        }
+        const pickController = new FakePickController(results);
+        const pivotController = new FakePivotController();
+        const controller = new NavigationContextController(scene, pickController, pivotController);
+        return {scene, pickController, pivotController, controller};
+    }
+
+    function normalizedDirection(eye, worldPos) {
+        const x = worldPos[0] - eye[0];
+        const y = worldPos[1] - eye[1];
+        const z = worldPos[2] - eye[2];
+        const length = Math.sqrt(x * x + y * y + z * z);
+        return [x / length, y / length, z / length].map((value) => Number(value.toFixed(8)));
+    }
+
+    function signedDepthFromEye(eye, worldPos, direction) {
+        return (worldPos[0] - eye[0]) * direction[0]
+            + (worldPos[1] - eye[1]) * direction[1]
+            + (worldPos[2] - eye[2]) * direction[2];
+    }
+
+    function pointerRay(scene, canvasPos) {
+        const rayOrigin = math.vec3();
+        const rayDirection = math.vec3();
+        math.canvasPosToWorldRay(
+            scene.canvas.canvas,
+            scene.camera.viewMatrix,
+            scene.camera.projMatrix,
+            scene.camera.projection,
+            canvasPos,
+            rayOrigin,
+            rayDirection
+        );
+        return {rayOrigin, rayDirection};
+    }
+
+    function pointerReferenceSummary(reference, eye) {
+        return {
+            canvasPos: Array.from(reference.canvasPos),
+            source: reference.source,
+            depth: reference.depth,
+            direction: normalizedDirection(eye, reference.worldPos)
+        };
+    }
+
+    window.runWheelNormalizationScenario = () => ({
+        pixel: normalizeWheelDelta(7.5, WheelEvent.DOM_DELTA_PIXEL, 800),
+        line: normalizeWheelDelta(3, WheelEvent.DOM_DELTA_LINE, 800),
+        halfPage: normalizeWheelDelta(0.5, WheelEvent.DOM_DELTA_PAGE, 800),
+        clampedPage: normalizeWheelDelta(2, WheelEvent.DOM_DELTA_PAGE, 800),
+        negativeLine: normalizeWheelDelta(-2, WheelEvent.DOM_DELTA_LINE, 800),
+        zero: normalizeWheelDelta(0, WheelEvent.DOM_DELTA_PIXEL, 800),
+        sessionGap: WHEEL_SESSION_GAP_MS
+    });
+
+    window.runZoomSessionScenario = () => {
+        const entityA = {id: "A", visible: true, clippable: true, isSceneModelEntity: true, model: {id: "modelA"}};
+        const entityB = {id: "B", visible: true, clippable: true, isSceneModelEntity: true, model: {id: "modelB"}};
+        const harness = makeHarness([
+            {worldPos: [0, 0, -10], entity: entityA},
+            {worldPos: [4, 0, -20], entity: entityB}
+        ]);
+        const first = harness.controller.beginOrContinueZoom([100, 100], 0);
+        const same = harness.controller.beginOrContinueZoom([700, 500], 159);
+        const next = harness.controller.beginOrContinueZoom([700, 500], 319);
+        return {
+            first: Array.from(first.worldPos),
+            same: Array.from(same.worldPos),
+            next: Array.from(next.worldPos),
+            firstSource: first.source,
+            nextSource: next.source,
+            pickCount: harness.pickController.pickCount
+        };
+    };
+
+    window.runPointerRayFallbackScenario = () => {
+        const canvasPos = [750, 250];
+
+        const pivotHarness = makeHarness();
+        pivotHarness.controller.establishNavigationPivot([2, 0, -8], "orbit");
+        const pivot = pivotHarness.controller.resolveOrbitReference(canvasPos);
+
+        const lastHarness = makeHarness([{worldPos: [0, 0, -12], entity: {id: "last", visible: true}}]);
+        lastHarness.controller.beginOrContinueZoom([500, 400], 0);
+        const last = lastHarness.controller.resolveOrbitReference(canvasPos);
+
+        const boundsHarness = makeHarness();
+        boundsHarness.scene.numVisibleObjects = 1;
+        boundsHarness.scene.visibleObjectIds = ["visible"];
+        boundsHarness.scene._aabb = [-2, -2, -12, 2, 2, -8];
+        const bounds = boundsHarness.controller.resolveOrbitReference(canvasPos);
+
+        const lookHarness = makeHarness();
+        const look = lookHarness.controller.resolveOrbitReference(canvasPos);
+
+        const rayOrigin = math.vec3();
+        const rayDirection = math.vec3();
+        math.canvasPosToWorldRay(
+            lookHarness.scene.canvas.canvas,
+            lookHarness.scene.camera.viewMatrix,
+            lookHarness.scene.camera.projMatrix,
+            lookHarness.scene.camera.projection,
+            canvasPos,
+            rayOrigin,
+            rayDirection
+        );
+
+        return {
+            pivot: pointerReferenceSummary(pivot, pivotHarness.scene.camera.eye),
+            last: pointerReferenceSummary(last, lastHarness.scene.camera.eye),
+            bounds: pointerReferenceSummary(bounds, boundsHarness.scene.camera.eye),
+            look: pointerReferenceSummary(look, lookHarness.scene.camera.eye),
+            expectedRayDirection: Array.from(rayDirection).map((value) => Number(value.toFixed(8))),
+            pickCounts: [
+                pivotHarness.pickController.pickCount,
+                lastHarness.pickController.pickCount,
+                boundsHarness.pickController.pickCount,
+                lookHarness.pickController.pickCount
+            ]
+        };
+    };
+
+    window.runPointerRayDepthScenario = () => {
+        const canvasPos = [750, 250];
+
+        const perspective = makeHarness();
+        const perspectiveReference = perspective.controller.resolveOrbitReference(canvasPos);
+        const perspectiveRay = pointerRay(perspective.scene, canvasPos);
+
+        const ortho = makeHarness();
+        const orthoCamera = ortho.scene.camera;
+        orthoCamera.eye = [0, 0, 10];
+        orthoCamera.look = [0, 0, 0];
+        orthoCamera.projection = "ortho";
+        orthoCamera.viewMatrix = math.lookAtMat4v(orthoCamera.eye, orthoCamera.look, [0, 1, 0], math.mat4());
+        orthoCamera.projMatrix = math.orthoMat4c(-50, 50, -40, 40, 0.1, 1000, math.mat4());
+        orthoCamera.eyeLookDist = 10;
+        const orthoReference = ortho.controller.resolveOrbitReference(canvasPos);
+        const orthoRay = pointerRay(ortho.scene, canvasPos);
+        const dollyStep = computeZoomDelta(-1, Math.abs(orthoReference.depth), 30, 0.04, false);
+
+        return {
+            perspective: {
+                lookDepth: perspectiveReference.depth,
+                lookSignedDepth: signedDepthFromEye(
+                    perspective.scene.camera.eye,
+                    perspectiveReference.worldPos,
+                    perspectiveRay.rayDirection
+                ),
+                lookWorldZ: perspectiveReference.worldPos[2]
+            },
+            ortho: {
+                lookDepth: orthoReference.depth,
+                lookSignedDepth: signedDepthFromEye(
+                    ortho.scene.camera.eye,
+                    orthoReference.worldPos,
+                    orthoRay.rayDirection
+                ),
+                lookWorldZ: orthoReference.worldPos[2],
+                dollyStep: Math.abs(dollyStep)
+            }
+        };
+    };
+
+    window.runCrossedAnchorLifetimeScenario = () => {
+        const entityA = {id: "A", visible: true};
+        const entityB = {id: "B", visible: true};
+        const harness = makeHarness([
+            {worldPos: [0, 0, -10], entity: entityA},
+            {worldPos: [0, 0, -20], entity: entityB}
+        ]);
+        const first = harness.controller.beginOrContinueZoom([500, 400], 0);
+        harness.controller.markZoomAnchorCrossed();
+        harness.scene.camera.eye = [0, 0, -12];
+        harness.scene.camera.look = [0, 0, -22];
+        harness.scene.camera.viewMatrix = math.lookAtMat4v(
+            harness.scene.camera.eye,
+            harness.scene.camera.look,
+            [0, 1, 0],
+            math.mat4()
+        );
+        const same = harness.controller.beginOrContinueZoom([700, 500], 159);
+        const sameSessionPickCount = harness.pickController.pickCount;
+        const next = harness.controller.beginOrContinueZoom([700, 500], 319);
+
+        return {
+            sameCrossed: same.crossed,
+            sameRecord: same === first,
+            sameSessionPickCount,
+            nextCrossed: next.crossed,
+            nextRecord: next === first,
+            nextSessionPickCount: harness.pickController.pickCount
+        };
+    };
+
+    window.runInvalidatedSessionRayScenario = () => {
+        const entity = {id: "A", visible: true, clippable: true, isObject: true};
+        const harness = makeHarness([{worldPos: [0, 0, -10], entity}]);
+        const firstCanvasPos = [500, 400];
+        const movedCanvasPos = [750, 250];
+        harness.controller.beginOrContinueZoom(firstCanvasPos, 0);
+        entity.visible = false;
+        harness.scene.fire("objectVisibility", entity);
+        const sameSession = harness.controller.beginOrContinueZoom(movedCanvasPos, 50);
+        const sameSessionRay = pointerRay(harness.scene, sameSession.canvasPos);
+
+        entity.visible = true;
+        harness.scene.objects[entity.id] = entity;
+        harness.pickController.results.push(null);
+        const nextSession = harness.controller.beginOrContinueZoom(movedCanvasPos, 210);
+        const nextSessionRay = pointerRay(harness.scene, nextSession.canvasPos);
+
+        return {
+            sameSessionCanvasPos: Array.from(sameSession.canvasPos),
+            sameSessionDirection: Array.from(sameSessionRay.rayDirection).map((value) => Number(value.toFixed(8))),
+            nextSessionCanvasPos: Array.from(nextSession.canvasPos),
+            nextSessionDirection: Array.from(nextSessionRay.rayDirection).map((value) => Number(value.toFixed(8)))
+        };
+    };
+
+    window.runFallbackOrderScenario = () => {
+        const pivotHarness = makeHarness([null]);
+        pivotHarness.controller.establishNavigationPivot([2, 0, -8], "orbit");
+        const pivot = pivotHarness.controller.beginOrContinueZoom([100, 100], 0);
+
+        const lastHarness = makeHarness([
+            {worldPos: [0, 0, -12], entity: {id: "last", visible: true}},
+            null
+        ]);
+        lastHarness.controller.beginOrContinueZoom([500, 400], 0);
+        const last = lastHarness.controller.beginOrContinueZoom([500, 400], 160);
+
+        const boundsHarness = makeHarness([null]);
+        boundsHarness.scene.numVisibleObjects = 1;
+        boundsHarness.scene.visibleObjectIds = ["visible"];
+        boundsHarness.scene._aabb = [-2, -2, -12, 2, 2, -8];
+        const bounds = boundsHarness.controller.beginOrContinueZoom([500, 400], 0);
+
+        const forwardHarness = makeHarness([null]);
+        const forward = forwardHarness.controller.beginOrContinueZoom([500, 400], 0);
+
+        return {
+            pivot: {source: pivot.source, worldPos: Array.from(pivot.worldPos), canvasPos: Array.from(pivot.canvasPos)},
+            last: {source: last.source, worldPos: Array.from(last.worldPos)},
+            bounds: {source: bounds.source, worldPos: Array.from(bounds.worldPos)},
+            forward: {source: forward.source, worldPos: Array.from(forward.worldPos)}
+        };
+    };
+
+    window.runInvalidCandidateScenario = () => {
+        const nonFiniteHarness = makeHarness([{worldPos: [NaN, 0, -5]}]);
+        const nonFinite = nonFiniteHarness.controller.beginOrContinueZoom([500, 400], 0);
+
+        const behindHarness = makeHarness([{worldPos: [0, 0, 5]}]);
+        const behind = behindHarness.controller.beginOrContinueZoom([500, 400], 0);
+
+        const offscreenHarness = makeHarness([null]);
+        offscreenHarness.scene.numVisibleObjects = 1;
+        offscreenHarness.scene.visibleObjectIds = ["visible"];
+        offscreenHarness.scene._aabb = [19, -1, -11, 21, 1, -9];
+        const offscreen = offscreenHarness.controller.beginOrContinueZoom([500, 400], 0);
+
+        return {
+            nonFinite: nonFinite.source,
+            behind: behind.source,
+            offscreen: offscreen.source
+        };
+    };
+
+    window.runInvalidationScenario = () => {
+        const makeHit = () => {
+            const model = {id: "modelA"};
+            const entity = {id: "entityA", visible: true, clippable: true, isSceneModelEntity: true, model};
+            return {entity, result: {worldPos: [0, 0, -10], entity}};
+        };
+
+        const hiddenHit = makeHit();
+        const hiddenHarness = makeHarness([hiddenHit.result]);
+        hiddenHarness.controller.beginOrContinueZoom([500, 400], 0);
+        hiddenHit.entity.visible = false;
+        hiddenHarness.scene.fire("objectVisibility", hiddenHit.entity);
+        const hidden = hiddenHarness.controller.beginOrContinueZoom([500, 400], 50);
+
+        const unloadHit = makeHit();
+        const unloadHarness = makeHarness([unloadHit.result]);
+        unloadHarness.controller.beginOrContinueZoom([500, 400], 0);
+        unloadHarness.scene.fire("modelUnloaded", "modelA");
+        const unloaded = unloadHarness.controller.beginOrContinueZoom([500, 400], 50);
+
+        const clippedHit = makeHit();
+        const clippedHarness = makeHarness([clippedHit.result]);
+        clippedHarness.controller.beginOrContinueZoom([500, 400], 0);
+        clippedHarness.scene.sectionPlanes.cut = {active: true, pos: [0, 0, -5], dir: [0, 0, 1]};
+        clippedHarness.scene.fire("sectionPlaneUpdated", clippedHarness.scene.sectionPlanes.cut);
+        const clipped = clippedHarness.controller.beginOrContinueZoom([500, 400], 50);
+
+        const pivotHit = makeHit();
+        const pivotHarness = makeHarness([pivotHit.result, null]);
+        pivotHarness.controller.resolvePanReference([500, 400]);
+        pivotHarness.scene.sectionPlanes.cut = {active: true, pos: [0, 0, -5], dir: [0, 0, 1]};
+        pivotHarness.scene.fire("sectionPlaneUpdated", pivotHarness.scene.sectionPlanes.cut);
+        const clippedPivot = pivotHarness.controller.beginOrContinueZoom([500, 400], 0);
+
+        const destroyedHit = makeHit();
+        const destroyedHarness = makeHarness([destroyedHit.result, null]);
+        destroyedHarness.controller.beginOrContinueZoom([500, 400], 0);
+        delete destroyedHarness.scene.objects[destroyedHit.entity.id];
+        destroyedHit.entity.destroyed = true;
+        const destroyed = destroyedHarness.controller.beginOrContinueZoom([500, 400], 50);
+
+        const nonObjectEntity = {id: "helper", visible: true, clippable: true, isObject: false};
+        const nonObjectHarness = makeHarness([{worldPos: [1, 0, -10], entity: nonObjectEntity}]);
+        delete nonObjectHarness.scene.objects[nonObjectEntity.id];
+        const nonObject = nonObjectHarness.controller.beginOrContinueZoom([500, 400], 0);
+
+        return {
+            hidden: hidden.source,
+            unloaded: unloaded.source,
+            clipped: clipped.source,
+            clippedPivot: {source: clippedPivot.source, worldPos: Array.from(clippedPivot.worldPos)},
+            destroyed: destroyed.source,
+            nonObject: nonObject.source,
+            pickCounts: [
+                hiddenHarness.pickController.pickCount,
+                unloadHarness.pickController.pickCount,
+                clippedHarness.pickController.pickCount,
+                pivotHarness.pickController.pickCount,
+                destroyedHarness.pickController.pickCount
+            ]
+        };
+    };
+
+    window.runWheelHandlerScenario = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 1000;
+        canvas.height = 800;
+        Object.defineProperties(canvas, {
+            clientWidth: {value: 1000},
+            clientHeight: {value: 800}
+        });
+        document.body.appendChild(canvas);
+
+        const scene = {
+            canvas: {canvas, boundary: [0, 0, 1000, 800]},
+            input: {keyboardEnabled: true, MOUSE_LEFT_BUTTON: 1, MOUSE_MIDDLE_BUTTON: 2, MOUSE_RIGHT_BUTTON: 3},
+            camera: {projection: "perspective", eyeLookDist: 10, perspective: {fov: 60}, ortho: {scale: 10}}
+        };
+        const controllers = {
+            pickController: {pickSurface: () => null},
+            cameraControl: {MOUSE_DOLLY: 20, MOUSE_PAN: 18, MOUSE_ROTATE: 19, _isKeyDownForAction: () => true, fire: () => {}}
+        };
+        const configs = {
+            active: true,
+            pointerEnabled: true,
+            followPointer: true,
+            zoomOnMouseWheel: true,
+            mouseWheelDollyRate: 100,
+            planView: false,
+            panRightClick: true,
+            firstPerson: false,
+            dragRotationRate: 360
+        };
+        const states = {pointerCanvasPos: [250, 300], mouseover: true};
+        const updates = {dollyDelta: 0, panDeltaX: 0, panDeltaY: 0, rotateDeltaX: 0, rotateDeltaY: 0};
+        const handler = new MousePanRotateDollyHandler(scene, controllers, configs, states, updates);
+
+        const dispatch = (deltaY, deltaMode, timestamp) => {
+            const event = new WheelEvent("wheel", {deltaY, deltaMode});
+            Object.defineProperty(event, "timeStamp", {value: timestamp});
+            canvas.dispatchEvent(event);
+            return {
+                dollyDelta: updates.dollyDelta,
+                timestamp: updates.dollyTimestamp,
+                lastEventTime: updates.dollyLastEventTime,
+                canvasPos: updates.dollyCanvasPos && Array.from(updates.dollyCanvasPos)
+            };
+        };
+
+        const pixel1 = dispatch(1, WheelEvent.DOM_DELTA_PIXEL, 10);
+        updates.dollyDelta = 0;
+        const pixel100 = dispatch(100, WheelEvent.DOM_DELTA_PIXEL, 20);
+        updates.dollyDelta = 0;
+        const lines = dispatch(3, WheelEvent.DOM_DELTA_LINE, 30);
+        updates.dollyDelta = 0;
+        const pages = dispatch(2, WheelEvent.DOM_DELTA_PAGE, 40);
+        const beforeZeroTimestamp = updates.dollyTimestamp;
+        updates.dollyDelta = 0;
+        const zero = dispatch(0, WheelEvent.DOM_DELTA_PIXEL, 50);
+
+        handler.destroy();
+        canvas.remove();
+        return {pixel1, pixel100, lines, pages, zero, beforeZeroTimestamp};
+    };
+
+    window.runLegacyWheelHandlerScenario = () => {
+        const canvas = document.createElement("canvas");
+        Object.defineProperties(canvas, {
+            clientWidth: {value: 1000},
+            clientHeight: {value: 800}
+        });
+        document.body.appendChild(canvas);
+        const scene = {
+            canvas: {canvas, boundary: [0, 0, 1000, 800]},
+            input: {keyboardEnabled: true, MOUSE_LEFT_BUTTON: 1, MOUSE_MIDDLE_BUTTON: 2, MOUSE_RIGHT_BUTTON: 3},
+            camera: {projection: "perspective", eyeLookDist: 10, perspective: {fov: 60}, ortho: {scale: 10}}
+        };
+        const controllers = {
+            navigationContextController: {resolvePanReference: () => ({depth: 10})},
+            cameraControl: {MOUSE_DOLLY: 20, MOUSE_PAN: 18, MOUSE_ROTATE: 19, _isKeyDownForAction: () => true, fire: () => {}}
+        };
+        const configs = {
+            active: true, pointerEnabled: true, followPointer: false, zoomOnMouseWheel: true,
+            mouseWheelDollyRate: 100, planView: false, panRightClick: true, firstPerson: false, dragRotationRate: 360
+        };
+        const states = {pointerCanvasPos: [250, 300], mouseover: true};
+        const updates = {dollyDelta: 0, panDeltaX: 0, panDeltaY: 0, rotateDeltaX: 0, rotateDeltaY: 0};
+        const handler = new MousePanRotateDollyHandler(scene, controllers, configs, states, updates);
+        const dispatch = (deltaY) => {
+            canvas.dispatchEvent(new WheelEvent("wheel", {deltaY, deltaMode: WheelEvent.DOM_DELTA_PIXEL}));
+            const result = {dollyDelta: updates.dollyDelta, inputSource: updates.dollyInputSource || null};
+            updates.dollyDelta = 0;
+            return result;
+        };
+        const small = dispatch(1);
+        const large = dispatch(100);
+        handler.destroy();
+        canvas.remove();
+        return {small, large};
+    };
+
+    window.runZoomDeltaScenario = () => ({
+        beforeCrossNear: computeZoomDelta(-1, 10, 30, 0.04, false),
+        beforeCrossFar: computeZoomDelta(-1, 100, 30, 0.04, false),
+        crossing: computeZoomDelta(-100, 10, 30, 0.04, false),
+        afterCrossIn: computeZoomDelta(-100, 20, 30, 0.04, true),
+        afterCrossInAtAnchor: computeZoomDelta(-100, 0, 30, 0.04, true),
+        afterCrossOut: computeZoomDelta(100, 20, 30, 0.04, true),
+        afterCrossOutNear: computeZoomDelta(100, 0.25, 30, 0.04, true),
+        afterCrossOutAtAnchor: computeZoomDelta(100, 0, 30, 0.04, true),
+        outward: computeZoomDelta(1, 10, 30, 0.04, false)
+    });
+
+    window.runInvalidSectionFallbackScenario = () => {
+        const parallel = makeHarness([null]);
+        parallel.scene.numVisibleObjects = 1;
+        parallel.scene.visibleObjectIds = ["visible"];
+        parallel.scene._aabb = [-0.5, -0.5, -10.5, 0.5, 0.5, -9.5];
+        parallel.scene.sectionPlanes.parallel = {active: true, pos: [1, 0, 0], dir: [1, 0, 0]};
+        const parallelAnchor = parallel.controller.beginOrContinueZoom([500, 400], 0);
+        const parallelAgain = parallel.controller.beginOrContinueZoom([500, 400], 50);
+
+        const contradictory = makeHarness([null]);
+        contradictory.scene.sectionPlanes.front = {active: true, pos: [0, 0, -2], dir: [0, 0, -1]};
+        contradictory.scene.sectionPlanes.back = {active: true, pos: [0, 0, -1], dir: [0, 0, 1]};
+        const contradictoryAnchor = contradictory.controller.beginOrContinueZoom([500, 400], 0);
+        return {
+            parallel: parallelAnchor,
+            parallelAgain,
+            parallelAABBReads: parallel.scene.aabbReadCount,
+            contradictory: contradictoryAnchor
+        };
+    };
+
+    window.runCameraUpdaterCrossingScenario = () => {
+        const initialAnchor = [2, 0, -10];
+        const initialCanvasPos = [660, 400];
+        const minimumFactor = 0.04;
+        const proximityThreshold = 30;
+        const rayLength = Math.hypot(...initialAnchor);
+        const forwardDirection = initialAnchor.map((value) => value / rayLength);
+        const nextAnchor = forwardDirection.map((value) => value * 50);
+        const camera = {
+            eye: [0, 0, 0],
+            look: [0, 0, -10],
+            eyeLookDist: 10,
+            projection: "perspective",
+            viewMatrix: math.lookAtMat4v([0, 0, 0], [0, 0, -10], [0, 1, 0], math.mat4()),
+            projMatrix: math.perspectiveMat4(60 * Math.PI / 180, 1000 / 800, 0.1, 1000, math.mat4()),
+            perspective: {near: 0.1},
+            ortho: {near: 0.1, scale: 10},
+            zoom: () => {},
+            pan: () => {},
+            project: {
+                transposedMatrix: new Float64Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]),
+                unproject: (canvasPos, screenZ, screenPos, viewPos, worldPos) => {
+                    worldPos[0] = camera.eye[0] + forwardDirection[0] * 10;
+                    worldPos[1] = camera.eye[1] + forwardDirection[1] * 10;
+                    worldPos[2] = camera.eye[2] + forwardDirection[2] * 10;
+                    worldPos[3] = 1;
+                }
+            }
+        };
+        const initialEntity = {id: "initial-anchor", visible: true};
+        const nextEntity = {id: "next-anchor", visible: true};
+        const harness = makeHarness([
+            {worldPos: initialAnchor, entity: initialEntity},
+            {worldPos: nextAnchor, entity: nextEntity}
+        ]);
+        harness.scene.camera = camera;
+        let tick;
+        const originalOn = harness.scene.on.bind(harness.scene);
+        harness.scene.on = (name, callback) => {
+            if (name === "tick") {
+                tick = callback;
+            }
+            return originalOn(name, callback);
+        };
+        const appliedDollyDistances = [];
+        const cameraPositions = [];
+        const realPanController = new PanController({
+            camera,
+            canvas: {canvas: {clientWidth: 1000, clientHeight: 800}}
+        });
+        const panController = {
+            dollyToCanvasPos: (worldPos, canvasPos, dollyDelta) => {
+                const crossed = realPanController.dollyToCanvasPos(worldPos, canvasPos, dollyDelta);
+                appliedDollyDistances.push(dollyDelta);
+                cameraPositions.push(Array.from(camera.eye));
+                return crossed;
+            }
+        };
+        let beginCount = 0;
+        const activeAnchors = [];
+        const beginOrContinueZoom = harness.controller.beginOrContinueZoom.bind(harness.controller);
+        harness.controller.beginOrContinueZoom = (canvasPos, timestamp) => {
+            camera.viewMatrix = math.lookAtMat4v(camera.eye, camera.look, [0, 1, 0], math.mat4());
+            beginCount++;
+            const anchor = beginOrContinueZoom(canvasPos, timestamp);
+            activeAnchors.push(anchor);
+            return anchor;
+        };
+        const controllers = {
+            cameraControl: {_cursors: {dollyForward: "in", dollyBackward: "out", rotate: "rotate", pan: "pan"}},
+            pickController: {fireEvents: () => {}, update: () => {}, pickResult: null},
+            pivotController: {getPivoting: () => false},
+            panController,
+            navigationContextController: harness.controller
+        };
+        const configs = {
+            active: true,
+            pointerEnabled: true,
+            followPointer: true,
+            firstPerson: false,
+            planView: false,
+            constrainVertical: false,
+            dollyProximityThreshold: proximityThreshold,
+            dollyMinSpeed: minimumFactor,
+            dollyInertia: 0,
+            rotationInertia: 0,
+            panInertia: 0
+        };
+        const states = {pointerCanvasPos: [250, 300], followPointerDirty: true};
+        const updates = {
+            dollyDelta: 0,
+            dollyTimestamp: 0,
+            dollyLastEventTime: performance.now(),
+            dollyCanvasPos: initialCanvasPos,
+            dollyInputSource: "wheel",
+            rotateDeltaX: 0,
+            rotateDeltaY: 0,
+            panDeltaX: 0,
+            panDeltaY: 0,
+            panDeltaZ: 0
+        };
+        const updater = new CameraUpdater(harness.scene, controllers, configs, states, updates);
+        const distanceTo = (worldPos) => Math.hypot(
+            worldPos[0] - camera.eye[0],
+            worldPos[1] - camera.eye[1],
+            worldPos[2] - camera.eye[2]
+        );
+        const signedDistanceTo = (worldPos, canvasPos) => {
+            const ray = pointerRay(harness.scene, canvasPos);
+            return signedDepthFromEye(camera.eye, worldPos, ray.rayDirection);
+        };
+        const drive = (input, timestamp, canvasPos, target) => {
+            const distanceBefore = distanceTo(target);
+            const signedDistanceBefore = signedDistanceTo(target, canvasPos);
+            const eyeBefore = Array.from(camera.eye);
+            const dollyCallStart = appliedDollyDistances.length;
+            updates.dollyDelta = input;
+            updates.dollyTimestamp = timestamp;
+            updates.dollyLastEventTime = performance.now();
+            updates.dollyCanvasPos = canvasPos;
+            tick();
+            const eyeAfter = Array.from(camera.eye);
+            return {
+                distanceBefore,
+                signedDistanceBefore,
+                step: appliedDollyDistances.length > dollyCallStart
+                    ? Math.abs(appliedDollyDistances[appliedDollyDistances.length - 1])
+                    : null,
+                crossed: activeAnchors[activeAnchors.length - 1].crossed,
+                signedDisplacement: (eyeAfter[0] - eyeBefore[0]) * forwardDirection[0]
+                    + (eyeAfter[1] - eyeBefore[1]) * forwardDirection[1]
+                    + (eyeAfter[2] - eyeBefore[2]) * forwardDirection[2]
+            };
+        };
+
+        const preCrossInput = 1;
+        const preCross = drive(-preCrossInput, 0, initialCanvasPos, initialAnchor);
+        const crossingInput = 31;
+        const crossing = drive(-crossingInput, 40, [300, 200], initialAnchor);
+        const postCrossOutInput = 100;
+        const postCrossOut = drive(postCrossOutInput, 80, [900, 700], initialAnchor);
+        const postCrossInInput = 25;
+        const postCrossIn = drive(-postCrossInInput, 120, [100, 100], initialAnchor);
+        const sameSessionPickCount = harness.pickController.pickCount;
+        const sameSessionBeginCount = beginCount;
+        const sameSessionCanvasPos = Array.from(activeAnchors[3].canvasPos);
+        const sameSessionAnchorIdentity = activeAnchors.slice(1, 4).every((anchor) => anchor === activeAnchors[0]);
+
+        const nextSessionInput = 1;
+        const nextSession = drive(-nextSessionInput, 280, initialCanvasPos, nextAnchor);
+        updater.destroy();
+        return {
+            preCrossStep: preCross.step,
+            preCrossDisplacement: preCross.signedDisplacement,
+            preCrossCrossed: preCross.crossed,
+            currentCurveStep: preCrossInput * Math.max(minimumFactor, preCross.signedDistanceBefore / proximityThreshold),
+            crossingInput,
+            crossingStep: crossing.step,
+            crossingOvershoot: crossing.step - crossing.distanceBefore,
+            crossingDisplacement: crossing.signedDisplacement,
+            crossingCrossed: crossing.crossed,
+            postCrossInInput,
+            postCrossInStep: postCrossIn.step,
+            postCrossInDisplacement: postCrossIn.signedDisplacement,
+            postCrossInCrossed: postCrossIn.crossed,
+            postCrossOutInput,
+            postCrossOutStep: postCrossOut.step,
+            postCrossOutDisplacement: postCrossOut.signedDisplacement,
+            postCrossOutCrossed: postCrossOut.crossed,
+            minimumFactor,
+            sameSessionPickCount,
+            sameSessionBeginCount,
+            sameSessionCanvasPos,
+            initialCanvasPos,
+            sameSessionAnchorIdentity,
+            sameSessionCrossed: postCrossOut.crossed,
+            nextSessionPickCount: harness.pickController.pickCount,
+            nextSessionBeginCount: beginCount,
+            nextSessionAnchorIdentity: activeAnchors[4] !== activeAnchors[0],
+            nextSessionCrossed: nextSession.crossed,
+            nextSessionStep: nextSession.step,
+            nextSessionDisplacement: nextSession.signedDisplacement,
+            nextSessionCurrentCurveStep: nextSessionInput * Math.max(minimumFactor, nextSession.signedDistanceBefore / proximityThreshold),
+            appliedDollyDistances,
+            cameraPositions
+        };
+    };
+
+    window.runFirstPersonConstrainedCrossingScenario = () => {
+        const canvas = {clientWidth: 1000, clientHeight: 800};
+        const anchorWorldPos = [0, -10, -1];
+        const camera = {
+            projection: "perspective", eye: [0, 5, 0], look: [0, 5, -10], eyeLookDist: 10, yUp: true,
+            viewMatrix: math.lookAtMat4v([0, 5, 0], [0, 5, -10], [0, 1, 0], math.mat4()),
+            projMatrix: math.perspectiveMat4(60 * Math.PI / 180, 1000 / 800, 0.1, 1000, math.mat4()),
+            perspective: {near: 0.1}, ortho: {near: 0.1, scale: 10}, zoom: () => {}, pan: () => {},
+            project: {
+                transposedMatrix: new Float64Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]),
+                unproject: (canvasPos, screenZ, screenPos, viewPos, worldPos) => {
+                    worldPos[0] = anchorWorldPos[0];
+                    worldPos[1] = anchorWorldPos[1];
+                    worldPos[2] = anchorWorldPos[2];
+                    worldPos[3] = 1;
+                }
+            }
+        };
+        const entity = {id: "constrained-anchor", visible: true};
+        const harness = makeHarness([{worldPos: anchorWorldPos, entity}]);
+        harness.scene.camera = camera;
+        let tick;
+        const originalOn = harness.scene.on.bind(harness.scene);
+        harness.scene.on = (name, callback) => {
+            if (name === "tick") {
+                tick = callback;
+            }
+            return originalOn(name, callback);
+        };
+        const controllers = {
+            cameraControl: {_cursors: {dollyForward: "in", dollyBackward: "out", rotate: "rotate", pan: "pan"}},
+            pickController: {fireEvents: () => {}, update: () => {}, pickResult: null},
+            pivotController: {getPivoting: () => false},
+            panController: new PanController({camera, canvas: {canvas}}),
+            navigationContextController: harness.controller
+        };
+        const configs = {
+            active: true,
+            pointerEnabled: true,
+            followPointer: true,
+            firstPerson: true,
+            planView: false,
+            constrainVertical: true,
+            dollyProximityThreshold: 30,
+            dollyMinSpeed: 0.04,
+            dollyInertia: 0,
+            rotationInertia: 0,
+            panInertia: 0
+        };
+        const updates = {
+            dollyDelta: -100,
+            dollyTimestamp: 0,
+            dollyLastEventTime: performance.now(),
+            dollyCanvasPos: [500, 400],
+            dollyInputSource: "wheel",
+            rotateDeltaX: 0,
+            rotateDeltaY: 0,
+            panDeltaX: 0,
+            panDeltaY: 0,
+            panDeltaZ: 0
+        };
+        const updater = new CameraUpdater(harness.scene, controllers, configs, {pointerCanvasPos: [500, 400]}, updates);
+        camera.viewMatrix = math.lookAtMat4v(camera.eye, camera.look, [0, 1, 0], math.mat4());
+        tick();
+        const anchor = harness.controller.beginOrContinueZoom([500, 400], 0);
+        updater.destroy();
+        return {crossed: anchor.crossed, eye: Array.from(camera.eye), look: Array.from(camera.look)};
+    };
+
+    window.runExpiredInertiaScenario = () => {
+        let tick;
+        let beginCount = 0;
+        const zoomCalls = [];
+        const panCalls = [];
+        const camera = {
+            eye: [0, 0, 10], look: [0, 0, 0], projection: "perspective", eyeLookDist: 10,
+            perspective: {near: 0.1}, ortho: {near: 0.1, scale: 10}, zoom: (delta) => zoomCalls.push(delta), pan: () => {}
+        };
+        const scene = {camera, on: (name, callback) => { if (name === "tick") tick = callback; return callback; }, off: () => {}};
+        const controllers = {
+            cameraControl: {_cursors: {dollyForward: "in", dollyBackward: "out", rotate: "rotate", pan: "pan"}},
+            pickController: {
+                pickResult: null,
+                update() { this.pickResult = {worldPos: [5, 0, 0]}; },
+                fireEvents: () => {}
+            },
+            pivotController: {getPivoting: () => false},
+            panController: {dollyToCanvasPos: (worldPos) => { panCalls.push(worldPos && Array.from(worldPos)); return false; }},
+            navigationContextController: {beginOrContinueZoom: () => { beginCount++; return {worldPos: [0, 0, 0]}; }}
+        };
+        const configs = {
+            active: true, pointerEnabled: true, followPointer: true, firstPerson: false, planView: false,
+            constrainVertical: false, dollyProximityThreshold: 30, dollyMinSpeed: 0.04,
+            dollyInertia: 0.5, rotationInertia: 0, panInertia: 0
+        };
+        const updates = {
+            dollyDelta: -1, dollyTimestamp: null, dollyLastEventTime: null,
+            dollyCanvasPos: [500, 400], dollyInputSource: null,
+            rotateDeltaX: 0, rotateDeltaY: 0, panDeltaX: 0, panDeltaY: 0, panDeltaZ: 0
+        };
+        const states = {pointerCanvasPos: [500, 400], followPointerDirty: true};
+        const updater = new CameraUpdater(scene, controllers, configs, states, updates);
+        tick();
+        const warmupPanCount = panCalls.length;
+        updates.dollyDelta = -1;
+        updates.dollyTimestamp = 10;
+        updates.dollyLastEventTime = performance.now() - 200;
+        updates.dollyInputSource = "wheel";
+        tick();
+        updater.destroy();
+        return {beginCount, warmupPanCount, panCount: panCalls.length, zoomCalls, remainingDelta: updates.dollyDelta};
+    };
+
+    window.runPanHandlerScenario = () => {
+        const canvas = document.createElement("canvas");
+        Object.defineProperties(canvas, {
+            clientWidth: {value: 1000},
+            clientHeight: {value: 800}
+        });
+        document.body.appendChild(canvas);
+        let resolveCount = 0;
+        const scene = {
+            canvas: {canvas, boundary: [0, 0, 1000, 800]},
+            input: {
+                keyboardEnabled: true,
+                MOUSE_LEFT_BUTTON: 1,
+                MOUSE_MIDDLE_BUTTON: 2,
+                MOUSE_RIGHT_BUTTON: 3
+            },
+            camera: {projection: "perspective", eyeLookDist: 5, perspective: {fov: 60}, ortho: {scale: 10}}
+        };
+        const controllers = {
+            pickController: {pickSurface: () => null},
+            navigationContextController: {
+                resolvePanReference: () => {
+                    resolveCount++;
+                    return {worldPos: [0, 0, -20], depth: 20, source: "cursor-hit"};
+                }
+            },
+            cameraControl: {MOUSE_DOLLY: 20, MOUSE_PAN: 18, MOUSE_ROTATE: 19, _isKeyDownForAction: () => true, fire: () => {}}
+        };
+        const configs = {
+            active: true, pointerEnabled: true, zoomOnMouseWheel: true, mouseWheelDollyRate: 100,
+            followPointer: true, planView: false, panRightClick: true, firstPerson: false, dragRotationRate: 360
+        };
+        const states = {pointerCanvasPos: [100, 100], mouseover: true};
+        const updates = {dollyDelta: 0, panDeltaX: 0, panDeltaY: 0, rotateDeltaX: 0, rotateDeltaY: 0};
+        const handler = new MousePanRotateDollyHandler(scene, controllers, configs, states, updates);
+        const down = new MouseEvent("mousedown");
+        Object.defineProperty(down, "which", {value: 2});
+        canvas.dispatchEvent(down);
+        states.pointerCanvasPos[0] = 120;
+        document.dispatchEvent(new MouseEvent("mousemove"));
+        states.pointerCanvasPos[0] = 140;
+        document.dispatchEvent(new MouseEvent("mousemove"));
+        const up = new MouseEvent("mouseup");
+        Object.defineProperty(up, "which", {value: 2});
+        document.dispatchEvent(up);
+        handler.destroy();
+        canvas.remove();
+        return {resolveCount, panDeltaX: updates.panDeltaX};
+    };
+
+    window.runFollowPointerDisabledPanScenario = () => {
+        const canvas = document.createElement("canvas");
+        Object.defineProperties(canvas, {
+            clientWidth: {value: 1000},
+            clientHeight: {value: 800}
+        });
+        document.body.appendChild(canvas);
+        let resolveCount = 0;
+        const scene = {
+            canvas: {canvas, boundary: [0, 0, 1000, 800]},
+            input: {
+                keyboardEnabled: true,
+                MOUSE_LEFT_BUTTON: 1,
+                MOUSE_MIDDLE_BUTTON: 2,
+                MOUSE_RIGHT_BUTTON: 3
+            },
+            camera: {projection: "perspective", eyeLookDist: 5, perspective: {fov: 60}, ortho: {scale: 10}}
+        };
+        const controllers = {
+            pickController: {pickSurface: () => null},
+            navigationContextController: {
+                resolvePanReference: () => {
+                    resolveCount++;
+                    return {worldPos: [0, 0, -50], depth: 50, source: "visible-bounds"};
+                }
+            },
+            cameraControl: {MOUSE_DOLLY: 20, MOUSE_PAN: 18, MOUSE_ROTATE: 19, _isKeyDownForAction: () => true, fire: () => {}}
+        };
+        const configs = {
+            active: true, pointerEnabled: true, followPointer: false, zoomOnMouseWheel: true, mouseWheelDollyRate: 100,
+            planView: false, panRightClick: true, firstPerson: false, dragRotationRate: 360
+        };
+        const states = {pointerCanvasPos: [100, 100], mouseover: true};
+        const updates = {dollyDelta: 0, panDeltaX: 0, panDeltaY: 0, rotateDeltaX: 0, rotateDeltaY: 0};
+        const handler = new MousePanRotateDollyHandler(scene, controllers, configs, states, updates);
+        const down = new MouseEvent("mousedown");
+        Object.defineProperty(down, "which", {value: 2});
+        canvas.dispatchEvent(down);
+        states.pointerCanvasPos[0] = 140;
+        document.dispatchEvent(new MouseEvent("mousemove"));
+        const up = new MouseEvent("mouseup");
+        Object.defineProperty(up, "which", {value: 2});
+        document.dispatchEvent(up);
+        handler.destroy();
+        canvas.remove();
+        return {resolveCount, panDeltaX: updates.panDeltaX};
+    };
+
+    window.runPanDisableResetScenario = () => {
+        const canvas = document.createElement("canvas");
+        Object.defineProperties(canvas, {clientWidth: {value: 1000}, clientHeight: {value: 800}});
+        document.body.appendChild(canvas);
+        const scene = {
+            canvas: {canvas, boundary: [0, 0, 1000, 800]},
+            input: {keyboardEnabled: true, MOUSE_LEFT_BUTTON: 1, MOUSE_MIDDLE_BUTTON: 2, MOUSE_RIGHT_BUTTON: 3},
+            camera: {projection: "perspective", eyeLookDist: 5, perspective: {fov: 60}, ortho: {scale: 10}}
+        };
+        const controllers = {
+            navigationContextController: {resolvePanReference: () => ({depth: 20})},
+            cameraControl: {MOUSE_DOLLY: 20, MOUSE_PAN: 18, MOUSE_ROTATE: 19, _isKeyDownForAction: () => true, fire: () => {}}
+        };
+        const configs = {
+            active: true, pointerEnabled: true, followPointer: true, zoomOnMouseWheel: true, mouseWheelDollyRate: 100,
+            planView: false, panRightClick: true, firstPerson: false, dragRotationRate: 360
+        };
+        const states = {pointerCanvasPos: [100, 100], mouseover: true};
+        const updates = {dollyDelta: 0, panDeltaX: 0, panDeltaY: 0, rotateDeltaX: 0, rotateDeltaY: 0};
+        const handler = new MousePanRotateDollyHandler(scene, controllers, configs, states, updates);
+        const down = new MouseEvent("mousedown");
+        Object.defineProperty(down, "which", {value: 2});
+        canvas.dispatchEvent(down);
+        states.pointerCanvasPos[0] = 120;
+        document.dispatchEvent(new MouseEvent("mousemove"));
+        const beforeDisable = updates.panDeltaX;
+        handler.reset();
+        configs.active = false;
+        const up = new MouseEvent("mouseup");
+        Object.defineProperty(up, "which", {value: 2});
+        document.dispatchEvent(up);
+        configs.active = true;
+        states.pointerCanvasPos[0] = 140;
+        document.dispatchEvent(new MouseEvent("mousemove"));
+        const afterEnable = updates.panDeltaX;
+        handler.destroy();
+        canvas.remove();
+        return {beforeDisable, afterEnable};
+    };
+
+    window.runHeldModifierPanScenario = () => {
+        const canvas = document.createElement("canvas");
+        Object.defineProperties(canvas, {clientWidth: {value: 1000}, clientHeight: {value: 800}});
+        document.body.appendChild(canvas);
+        const scene = {
+            canvas: {canvas, boundary: [0, 0, 1000, 800]},
+            input: {
+                keyboardEnabled: true, KEY_SHIFT: 16,
+                MOUSE_LEFT_BUTTON: 1, MOUSE_MIDDLE_BUTTON: 2, MOUSE_RIGHT_BUTTON: 3
+            },
+            camera: {projection: "perspective", eyeLookDist: 5, perspective: {fov: 60}, ortho: {scale: 10}}
+        };
+        const controllers = {
+            navigationContextController: {resolvePanReference: () => ({depth: 20})},
+            cameraControl: {
+                MOUSE_DOLLY: 20, MOUSE_PAN: 18, MOUSE_ROTATE: 19,
+                _isKeyDownForAction: (action, keyDown) => action === 18 && !!keyDown[16],
+                fire: () => {}
+            }
+        };
+        const configs = {
+            active: true, pointerEnabled: true, followPointer: true, zoomOnMouseWheel: true, mouseWheelDollyRate: 100,
+            planView: false, panRightClick: true, firstPerson: false, dragRotationRate: 360
+        };
+        const states = {pointerCanvasPos: [100, 100], mouseover: true};
+        const updates = {dollyDelta: 0, panDeltaX: 0, panDeltaY: 0, rotateDeltaX: 0, rotateDeltaY: 0};
+        const handler = new MousePanRotateDollyHandler(scene, controllers, configs, states, updates);
+        const shiftDown = new KeyboardEvent("keydown");
+        Object.defineProperty(shiftDown, "keyCode", {value: 16});
+        document.dispatchEvent(shiftDown);
+        const drag = (nextX) => {
+            const down = new MouseEvent("mousedown");
+            Object.defineProperty(down, "which", {value: 1});
+            canvas.dispatchEvent(down);
+            states.pointerCanvasPos[0] = nextX;
+            document.dispatchEvent(new MouseEvent("mousemove"));
+            const up = new MouseEvent("mouseup");
+            Object.defineProperty(up, "which", {value: 1});
+            document.dispatchEvent(up);
+        };
+        drag(120);
+        const afterFirstDrag = updates.panDeltaX;
+        drag(140);
+        const afterSecondDrag = updates.panDeltaX;
+        handler.destroy();
+        canvas.remove();
+        return {afterFirstDrag, afterSecondDrag};
+    };
+
+    window.runPanPivotTranslationScenario = () => {
+        const translated = [];
+        const camera = {
+            eye: [0, 0, 10], look: [0, 0, 0], eyeLookDist: 10,
+            projection: "perspective", perspective: {near: 0.1}, ortho: {near: 0.1, scale: 10},
+            zoom: () => {},
+            pan: (delta) => {
+                camera.eye = [camera.eye[0] + delta[0], camera.eye[1] + delta[1], camera.eye[2] + delta[2]];
+                camera.look = [camera.look[0] + delta[0], camera.look[1] + delta[1], camera.look[2] + delta[2]];
+            }
+        };
+        let tick;
+        const scene = {camera, on: (name, callback) => { tick = callback; return callback; }, off: () => {}};
+        const controllers = {
+            cameraControl: {_cursors: {dollyForward: "in", dollyBackward: "out", rotate: "rotate", pan: "pan"}},
+            pickController: {fireEvents: () => {}},
+            pivotController: {getPivoting: () => false},
+            panController: {},
+            navigationContextController: {translateNavigationPivot: (delta) => translated.push(Array.from(delta))}
+        };
+        const configs = {
+            active: true, pointerEnabled: true, followPointer: true, firstPerson: false, planView: false,
+            constrainVertical: false, dollyProximityThreshold: 30, dollyMinSpeed: 0.04,
+            dollyInertia: 0, rotationInertia: 0, panInertia: 0
+        };
+        const states = {pointerCanvasPos: [0, 0], followPointerDirty: false};
+        const updates = {
+            dollyDelta: 0, rotateDeltaX: 0, rotateDeltaY: 0,
+            panDeltaX: 2, panDeltaY: -3, panDeltaZ: 0
+        };
+        const updater = new CameraUpdater(scene, controllers, configs, states, updates);
+        tick();
+        updater.destroy();
+        return {translated, eye: camera.eye, look: camera.look};
+    };
+
+    window.runOrbitPivotAdapterScenario = () => {
+        const canvas = document.createElement("canvas");
+        document.body.appendChild(canvas);
+        const established = [];
+        const scene = {
+            canvas: {canvas},
+            camera: {look: [0, 0, 0]},
+            tickify: (callback) => callback,
+            objects: {},
+            aabb: [-1, -1, -1, 1, 1, 1]
+        };
+        const pickController = {
+            pickResult: null,
+            pickedSurface: true,
+            update() {
+                this.pickResult = {worldPos: [1, 2, 3], entity: {id: "picked", aabb: [0, 0, 0, 2, 4, 6]}};
+            }
+        };
+        const pivotController = {
+            setPivotPos: () => {}, startPivot: () => true, showPivot: () => {}, hidePivot: () => {},
+            getPivoting: () => false, endPivot: () => {}, setCanvasPivotPos: () => {}
+        };
+        const controllers = {
+            pickController,
+            pivotController,
+            navigationContextController: {
+                establishNavigationPivot: (worldPos, reason) => established.push({worldPos: Array.from(worldPos), reason}),
+                reset: () => {}
+            },
+            cameraControl: {hasSubs: () => false, fire: () => {}},
+            cameraFlight: {flyTo: () => {}}
+        };
+        const configs = {
+            active: true, pointerEnabled: true, firstPerson: false, followPointer: true,
+            smartPivot: false, doublePickFlyTo: false, doubleClickTimeFrame: 250
+        };
+        const states = {pointerCanvasPos: [100, 120]};
+        const handler = new MousePickHandler(scene, controllers, configs, states, {});
+        const down = new MouseEvent("mousedown", {clientX: 100, clientY: 120});
+        Object.defineProperty(down, "which", {value: 1});
+        canvas.dispatchEvent(down);
+        handler.destroy();
+        canvas.remove();
+        return {established};
+    };
+
+    window.runEmptySpaceOrbitPivotAdapterScenario = () => {
+        const canvas = document.createElement("canvas");
+        document.body.appendChild(canvas);
+        const resolvedCanvasPositions = [];
+        const worldPivotCalls = [];
+        const canvasPivotCalls = [];
+        const navigationPivotCalls = [];
+        const scene = {
+            canvas: {canvas},
+            camera: {look: [0, 0, 0]},
+            tickify: (callback) => callback,
+            objects: {},
+            aabb: [-1, -1, -1, 1, 1, 1]
+        };
+        const pickController = {
+            pickResult: null,
+            pickedSurface: false,
+            update() {
+                this.pickResult = null;
+            }
+        };
+        const pivotController = {
+            setPivotPos: (worldPos) => worldPivotCalls.push(Array.from(worldPos)),
+            startPivot: () => true, showPivot: () => {}, hidePivot: () => {},
+            getPivoting: () => false, endPivot: () => {},
+            setCanvasPivotPos: (canvasPos) => canvasPivotCalls.push(Array.from(canvasPos))
+        };
+        const controllers = {
+            pickController,
+            pivotController,
+            navigationContextController: {
+                establishNavigationPivot: (worldPos) => navigationPivotCalls.push(Array.from(worldPos)),
+                resolveOrbitReference: (canvasPos) => {
+                    resolvedCanvasPositions.push(Array.from(canvasPos));
+                    return {worldPos: [3, 2, -9], canvasPos: [700, 300], source: "camera-look-depth"};
+                },
+                reset: () => {}
+            },
+            cameraControl: {hasSubs: () => false, fire: () => {}},
+            cameraFlight: {flyTo: () => {}}
+        };
+        const configs = {
+            active: true, pointerEnabled: true, firstPerson: false, followPointer: true,
+            smartPivot: true, doublePickFlyTo: false, doubleClickTimeFrame: 250
+        };
+        const states = {pointerCanvasPos: [700, 300]};
+        const handler = new MousePickHandler(scene, controllers, configs, states, {});
+        const down = new MouseEvent("mousedown", {clientX: 700, clientY: 300});
+        Object.defineProperty(down, "which", {value: 1});
+        canvas.dispatchEvent(down);
+        handler.destroy();
+        canvas.remove();
+        return {resolvedCanvasPositions, worldPivotCalls, canvasPivotCalls, navigationPivotCalls};
+    };
+
+    window.runControllerTeardownScenario = () => {
+        let selfDestroyCount = 0;
+        let childDestroyCount = 0;
+        const resetReasons = [];
+        const fakeCameraControl = {
+            destroy: () => { selfDestroyCount++; }
+        };
+        fakeCameraControl._controllers = {
+            cameraControl: fakeCameraControl,
+            navigationContextController: {reset: (reason) => resetReasons.push(reason)},
+            child: {destroy: () => { childDestroyCount++; }}
+        };
+        CameraControl.prototype._destroyControllers.call(fakeCameraControl);
+        return {selfDestroyCount, childDestroyCount, resetReasons};
+    };
+
+    window.runOrthographicAnchorScenario = () => {
+        const canvas = {clientWidth: 1000, clientHeight: 800};
+        const transposedMatrix = new Float64Array(16);
+        transposedMatrix[0] = transposedMatrix[5] = transposedMatrix[10] = transposedMatrix[15] = 1;
+        const camera = {
+            projection: "ortho",
+            eye: [0, 0, 10],
+            look: [0, 0, 0],
+            eyeLookDist: 10,
+            perspective: {near: 0.1},
+            ortho: {near: 0.1, scale: 10, _update: () => {}},
+            zoom: () => {},
+            pan: () => {},
+            project: {
+                transposedMatrix,
+                unproject: (canvasPos, screenZ, screenPos, viewPos, worldPos) => {
+                    worldPos[0] = camera.eye[0] + (canvasPos[0] - 500) * camera.ortho.scale / 800;
+                    worldPos[1] = camera.eye[1] - (canvasPos[1] - 400) * camera.ortho.scale / 800;
+                    worldPos[2] = 0;
+                    worldPos[3] = 1;
+                }
+            }
+        };
+        const projectX = (worldPos) => 500 + (worldPos[0] - camera.eye[0]) * 800 / camera.ortho.scale;
+        const anchor = [2, 0, 0];
+        const before = projectX(anchor);
+        let tick;
+        const scene = {
+            camera, numVisibleObjects: 0, visibleObjectIds: [], canvas: {canvas},
+            on: (name, callback) => { if (name === "tick") tick = callback; return callback; }, off: () => {}
+        };
+        const controllers = {
+            cameraControl: {_cursors: {dollyForward: "in", dollyBackward: "out", rotate: "rotate", pan: "pan"}},
+            pickController: {fireEvents: () => {}}, pivotController: {getPivoting: () => false},
+            panController: new PanController(scene),
+            navigationContextController: {beginOrContinueZoom: () => ({worldPos: anchor, canvasPos: [before, 400]})}
+        };
+        const configs = {
+            active: true, pointerEnabled: true, followPointer: true, firstPerson: false, planView: true,
+            constrainVertical: false, dollyProximityThreshold: 30, dollyMinSpeed: 0.04,
+            dollyInertia: 0, rotationInertia: 0, panInertia: 0
+        };
+        const updates = {
+            dollyDelta: -1, dollyTimestamp: 0, dollyCanvasPos: [before, 400], dollyInputSource: "wheel",
+            rotateDeltaX: 0, rotateDeltaY: 0, panDeltaX: 0, panDeltaY: 0, panDeltaZ: 0
+        };
+        const updater = new CameraUpdater(scene, controllers, configs, {pointerCanvasPos: [before, 400]}, updates);
+        tick();
+        updater.destroy();
+        const after = projectX(anchor);
+        return {before, after, scale: camera.ortho.scale};
+    };
+
+    window.runFirstPersonConstrainedWheelScenario = () => {
+        const canvas = {clientWidth: 1000, clientHeight: 800};
+        const anchor = [0, 2, -10];
+        const camera = {
+            projection: "perspective", eye: [0, 5, 0], look: [0, 5, -10], eyeLookDist: 10, yUp: true,
+            perspective: {near: 0.1}, ortho: {near: 0.1, scale: 10}, zoom: () => {}, pan: () => {},
+            project: {
+                transposedMatrix: new Float64Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]),
+                unproject: (canvasPos, screenZ, screenPos, viewPos, worldPos) => {
+                    worldPos[0] = anchor[0]; worldPos[1] = anchor[1]; worldPos[2] = anchor[2]; worldPos[3] = 1;
+                }
+            }
+        };
+        let tick;
+        const scene = {
+            camera, numVisibleObjects: 0, visibleObjectIds: [], canvas: {canvas},
+            on: (name, callback) => { if (name === "tick") tick = callback; return callback; }, off: () => {}
+        };
+        const controllers = {
+            cameraControl: {_cursors: {dollyForward: "in", dollyBackward: "out", rotate: "rotate", pan: "pan"}},
+            pickController: {fireEvents: () => {}}, pivotController: {getPivoting: () => false},
+            panController: new PanController(scene),
+            navigationContextController: {beginOrContinueZoom: () => ({worldPos: anchor, canvasPos: [500, 400]})}
+        };
+        const configs = {
+            active: true, pointerEnabled: true, followPointer: true, firstPerson: true, planView: false,
+            constrainVertical: true, dollyProximityThreshold: 30, dollyMinSpeed: 0.04,
+            dollyInertia: 0, rotationInertia: 0, panInertia: 0
+        };
+        const updates = {
+            dollyDelta: -1, dollyTimestamp: 0, dollyCanvasPos: [500, 400], dollyInputSource: "wheel",
+            rotateDeltaX: 0, rotateDeltaY: 0, panDeltaX: 0, panDeltaY: 0, panDeltaZ: 0
+        };
+        const updater = new CameraUpdater(scene, controllers, configs, {pointerCanvasPos: [500, 400]}, updates);
+        tick();
+        updater.destroy();
+        return {eye: Array.from(camera.eye), look: Array.from(camera.look)};
+    };
+
+    window.runLifecycleResetScenario = () => {
+        const handlerResetCalls = [];
+        const contextResetCalls = [];
+        const handlers = Array.from({length: 6}, (_, index) => ({reset: () => handlerResetCalls.push(index)}));
+        const fakeCameraControl = {
+            _configs: {active: true}, _handlers: handlers,
+            _updates: {panDeltaX: 1, panDeltaY: 1, panDeltaZ: 1, rotateDeltaX: 1, rotateDeltaY: 1, dollyDelta: 1},
+            _controllers: {navigationContextController: {reset: (reason) => contextResetCalls.push(reason)}},
+            _reset: CameraControl.prototype._reset
+        };
+        Object.getOwnPropertyDescriptor(CameraControl.prototype, "active").set.call(fakeCameraControl, false);
+
+        let inputKeyDown;
+        const axisResetCalls = [];
+        const axisScene = {
+            aabb: [-1, -1, -1, 1, 1, 1],
+            camera: {worldRight: [1, 0, 0], worldForward: [0, 0, -1], worldUp: [0, 1, 0]},
+            input: {keyboardEnabled: true, on: (name, callback) => { inputKeyDown = callback; return callback; }, off: () => {}}
+        };
+        const axisControllers = {
+            cameraControl: {
+                AXIS_VIEW_RIGHT: 1, AXIS_VIEW_BACK: 2, AXIS_VIEW_LEFT: 3, AXIS_VIEW_FRONT: 4, AXIS_VIEW_TOP: 5, AXIS_VIEW_BOTTOM: 6,
+                _isKeyDownForAction: (action) => action === 5
+            },
+            cameraFlight: {fitFOV: 45, duration: 0, jumpTo: () => {}},
+            navigationContextController: {reset: (reason) => axisResetCalls.push(reason)},
+            pivotController: {endPivot: () => {}, hidePivot: () => {}, getPivoting: () => false}
+        };
+        const axisHandler = new KeyboardAxisViewHandler(axisScene, axisControllers, {
+            active: true, pointerEnabled: true, keyboardEnabledOnlyIfMouseover: false, followPointer: true
+        }, {mouseover: true});
+        inputKeyDown();
+        axisHandler.destroy();
+
+        const canvas = document.createElement("canvas");
+        document.body.appendChild(canvas);
+        const flightResetCalls = [];
+        const pickResult = {worldPos: [0, 0, -5], entity: {id: "flight", aabb: [-1, -1, -6, 1, 1, -4]}};
+        const flightScene = {
+            canvas: {canvas}, camera: {eye: [0, 0, 0], look: [0, 0, -10]}, aabb: pickResult.entity.aabb, objects: {},
+            tickify: (callback) => callback
+        };
+        const pickController = {pickResult, pickedSurface: true, update() { this.pickResult = pickResult; }};
+        const flightHandler = new MousePickHandler(flightScene, {
+            pickController,
+            pivotController: {startPivot: () => true, getPivoting: () => false, hidePivot: () => {}, endPivot: () => {}},
+            navigationContextController: {reset: (reason) => flightResetCalls.push(reason), establishNavigationPivot: () => {}},
+            cameraControl: {hasSubs: () => false, fire: () => {}}, cameraFlight: {flyTo: () => {}}
+        }, {
+            active: true, pointerEnabled: true, firstPerson: false, followPointer: true, smartPivot: false,
+            doublePickFlyTo: true, doubleClickTimeFrame: 250
+        }, {pointerCanvasPos: [100, 100]}, {});
+        const click = () => {
+            const down = new MouseEvent("mousedown", {clientX: 100, clientY: 100});
+            Object.defineProperty(down, "which", {value: 1});
+            canvas.dispatchEvent(down);
+            const up = new MouseEvent("mouseup", {clientX: 100, clientY: 100, bubbles: true});
+            Object.defineProperty(up, "which", {value: 1});
+            canvas.dispatchEvent(up);
+        };
+        click(); click();
+        flightHandler.destroy();
+        canvas.remove();
+        return {handlerResetCalls, contextResetCalls, axisResetCalls, flightResetCalls};
+    };
+
+    window.runConstrainedPanPivotScenario = () => {
+        const translated = [];
+        const camera = {
+            eye: [0, 5, 10], look: [0, 5, 0], eyeLookDist: 10, yUp: true,
+            projection: "perspective", perspective: {near: 0.1}, ortho: {near: 0.1, scale: 10},
+            zoom: () => {},
+            pan: (delta) => {
+                camera.eye = [camera.eye[0] + delta[0], camera.eye[1] + delta[1], camera.eye[2] + delta[2]];
+                camera.look = [camera.look[0] + delta[0], camera.look[1] + delta[1], camera.look[2] + delta[2]];
+            }
+        };
+        let tick;
+        const scene = {camera, on: (name, callback) => { tick = callback; return callback; }, off: () => {}};
+        const controllers = {
+            cameraControl: {_cursors: {dollyForward: "in", dollyBackward: "out", rotate: "rotate", pan: "pan"}},
+            pickController: {fireEvents: () => {}}, pivotController: {getPivoting: () => false}, panController: {},
+            navigationContextController: {translateNavigationPivot: (delta) => translated.push(Array.from(delta))}
+        };
+        const configs = {
+            active: true, pointerEnabled: true, followPointer: true, firstPerson: false, planView: false,
+            constrainVertical: true, dollyProximityThreshold: 30, dollyMinSpeed: 0.04,
+            dollyInertia: 0, rotationInertia: 0, panInertia: 0
+        };
+        const updates = {dollyDelta: 0, rotateDeltaX: 0, rotateDeltaY: 0, panDeltaX: 2, panDeltaY: -3, panDeltaZ: 0};
+        const updater = new CameraUpdater(scene, controllers, configs, {pointerCanvasPos: [0, 0]}, updates);
+        tick();
+        updater.destroy();
+        return {translated, eye: camera.eye, look: camera.look};
+    };
+
+    window.runPanMissPivotScenario = () => {
+        const canvasPos = [750, 250];
+        const existing = makeHarness([null, null]);
+        existing.controller.establishNavigationPivot([0, 0, -8], "orbit");
+        const existingReference = existing.controller.resolvePanReference(canvasPos);
+        existing.controller.translateNavigationPivot([2, 0, 0]);
+        const translatedFallback = existing.controller.beginOrContinueZoom(canvasPos, 0);
+
+        const none = makeHarness([null, null]);
+        const noPivotReference = none.controller.resolvePanReference(canvasPos);
+        none.controller.translateNavigationPivot([2, 0, 0]);
+        const noPivotFallback = none.controller.beginOrContinueZoom(canvasPos, 0);
+
+        return {
+            existingReference: {
+                source: existingReference.source,
+                depth: existingReference.depth,
+                direction: normalizedDirection(existing.scene.camera.eye, existingReference.worldPos)
+            },
+            translatedFallback: {
+                source: translatedFallback.source,
+                direction: normalizedDirection(existing.scene.camera.eye, translatedFallback.worldPos)
+            },
+            noPivotReference: {
+                source: noPivotReference.source,
+                depth: noPivotReference.depth,
+                direction: normalizedDirection(none.scene.camera.eye, noPivotReference.worldPos)
+            },
+            noPivotFallback: {
+                source: noPivotFallback.source,
+                direction: normalizedDirection(none.scene.camera.eye, noPivotFallback.worldPos)
+            }
+        };
+    };
+
+    window.runExactCrossedAnchorScenario = () => {
+        const entity = {id: "exact", visible: true};
+        const harness = makeHarness([{worldPos: [0, 0, -10], entity}]);
+        const first = harness.controller.beginOrContinueZoom([500, 400], 0);
+        harness.controller.markZoomAnchorCrossed();
+        harness.scene.camera.eye = [0, 0, -10];
+        harness.scene.camera.look = [0, 0, -20];
+        harness.scene.camera.viewMatrix = math.lookAtMat4v(
+            harness.scene.camera.eye,
+            harness.scene.camera.look,
+            [0, 1, 0],
+            math.mat4()
+        );
+        const same = harness.controller.beginOrContinueZoom([500, 400], 50);
+        return {
+            sameRecord: same === first,
+            sameSource: same && same.source,
+            pickCount: harness.pickController.pickCount
+        };
+    };
+
+    const ready = document.createElement("div");
+    ready.id = "percyLoaded";
+    document.body.appendChild(ready);
+</script>
+</body>
+</html>

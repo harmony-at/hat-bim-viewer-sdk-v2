@@ -11,6 +11,7 @@ class MousePickHandler {
 
         const pickController = controllers.pickController;
         const pivotController = controllers.pivotController;
+        const navigationContextController = controllers.navigationContextController;
         const cameraControl = controllers.cameraControl;
 
         this._clicks = 0;
@@ -24,6 +25,7 @@ class MousePickHandler {
         const canvas = this._scene.canvas.canvas;
 
         const flyCameraTo = (pickResult) => {
+            navigationContextController.reset("camera-flight");
             let pos;
             if (pickResult && pickResult.worldPos) {
                 pos = pickResult.worldPos
@@ -164,18 +166,19 @@ class MousePickHandler {
                 if (e.which === 1) {// Left button
                     const pickResult = pickController.pickResult;
                     if (pickResult && pickResult.worldPos) {
-                        pivotController.setPivotPos(pickResult.worldPos);
+                        navigationContextController.establishNavigationPivot(pickResult.worldPos, "orbit", pickResult);
                         pivotController.startPivot();
                         this._lastClickedWorldPos = pickResult.worldPos.slice();
                     } else {
-                        if (configs.smartPivot) {
+                        const orbitReference = navigationContextController.resolveOrbitReference(states.pointerCanvasPos);
+                        if (orbitReference) {
+                            pivotController.setPivotPos(orbitReference.worldPos);
+                        } else if (configs.smartPivot) {
                             pivotController.setCanvasPivotPos(states.pointerCanvasPos);
+                        } else if (this._lastClickedWorldPos) {
+                            pivotController.setPivotPos(this._lastClickedWorldPos);
                         } else {
-                            if (this._lastClickedWorldPos) {
-                                pivotController.setPivotPos(this._lastClickedWorldPos);
-                            } else {
-                                pivotController.setPivotPos(scene.camera.look);
-                            }
+                            pivotController.setPivotPos(scene.camera.look);
                         }
                         pivotController.startPivot();
                     }
@@ -281,7 +284,7 @@ class MousePickHandler {
                             cameraControl.fire("pickedSurface", firstClickPickResult, true);
 
                             if ((!configs.firstPerson) && configs.followPointer) {
-                                controllers.pivotController.setPivotPos(firstClickPickResult.worldPos);
+                                navigationContextController.establishNavigationPivot(firstClickPickResult.worldPos, "orbit", firstClickPickResult);
                                 if (controllers.pivotController.startPivot()) {
                                     controllers.pivotController.showPivot();
                                 }
@@ -320,18 +323,6 @@ class MousePickHandler {
                     if (configs.doublePickFlyTo) {
 
                         flyCameraTo(pickController.pickResult);
-
-                        if ((!configs.firstPerson) && configs.followPointer) {
-
-                            const pickedEntityAABB = pickController.pickResult.entity.aabb;
-                            const pickedEntityCenterPos = math.getAABB3Center(pickedEntityAABB);
-
-                            controllers.pivotController.setPivotPos(pickedEntityCenterPos);
-
-                            if (controllers.pivotController.startPivot()) {
-                                controllers.pivotController.showPivot();
-                            }
-                        }
                     }
 
                 } else {
@@ -343,18 +334,6 @@ class MousePickHandler {
                     if (configs.doublePickFlyTo) {
 
                         flyCameraTo();
-
-                        if ((!configs.firstPerson) && configs.followPointer) {
-
-                            const sceneAABB = scene.aabb;
-                            const sceneCenterPos = math.getAABB3Center(sceneAABB);
-
-                            controllers.pivotController.setPivotPos(sceneCenterPos);
-
-                            if (controllers.pivotController.startPivot()) {
-                                controllers.pivotController.showPivot();
-                            }
-                        }
                     }
                 }
 

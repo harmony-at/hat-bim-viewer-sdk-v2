@@ -2,6 +2,7 @@
  * @private
  */
 import {math} from "../../../math/math.js";
+import {normalizeWheelDelta} from "../NavigationUtils.js";
 
 const canvasPos = math.vec2();
 
@@ -27,7 +28,7 @@ class MousePanRotateDollyHandler {
 
         this._scene = scene;
 
-        const pickController = controllers.pickController;
+        const navigationContextController = controllers.navigationContextController;
         const cameraControl = controllers.cameraControl;
 
         let lastX = 0;
@@ -41,14 +42,30 @@ class MousePanRotateDollyHandler {
         let mouseDownMiddle;
         let mouseDownRight;
 
-        let mouseDownPicked = false;
-        const pickedWorldPos = math.vec3();
-
-        let mouseMovedOnCanvasSinceLastWheel = true;
+        let panReferenceDepth = null;
+        let secsNowLast = null;
 
         const canvas = this._scene.canvas.canvas;
 
         const keyDown = [];
+
+        const resetMouseState = () => {
+            mouseDownLeft = false;
+            mouseDownMiddle = false;
+            mouseDownRight = false;
+            keyDown[scene.input.MOUSE_LEFT_BUTTON] = false;
+            keyDown[scene.input.MOUSE_MIDDLE_BUTTON] = false;
+            keyDown[scene.input.MOUSE_RIGHT_BUTTON] = false;
+            xRotateDelta = 0;
+            yRotateDelta = 0;
+            panReferenceDepth = null;
+        };
+
+        this._resetTransientState = () => {
+            resetMouseState();
+            keyDown.splice(0);
+            secsNowLast = null;
+        };
 
         document.addEventListener("keydown", this._documentKeyDownHandler = (e) => {
             if (!(configs.active && configs.pointerEnabled) || (!scene.input.keyboardEnabled)) {
@@ -92,15 +109,11 @@ class MousePanRotateDollyHandler {
         }
 
         function setMousedownPick() {
-            pickController.pickCursorPos = states.pointerCanvasPos;
-            pickController.schedulePickSurface = true;
-            pickController.update();
-
-            if (pickController.picked && pickController.pickedSurface && pickController.pickResult && pickController.pickResult.worldPos) {
-                mouseDownPicked = true;
-                pickedWorldPos.set(pickController.pickResult.worldPos);
+            if (configs.followPointer && navigationContextController) {
+                const panReference = navigationContextController.resolvePanReference(states.pointerCanvasPos);
+                panReferenceDepth = panReference.depth;
             } else {
-                mouseDownPicked = false;
+                panReferenceDepth = null;
             }
         }
 
@@ -199,7 +212,7 @@ class MousePanRotateDollyHandler {
 
                 if (camera.projection === "perspective") {
 
-                    const depth = Math.abs(mouseDownPicked ? math.lenVec3(math.subVec3(pickedWorldPos, scene.camera.eye, [])) : scene.camera.eyeLookDist);
+                    const depth = Math.abs(panReferenceDepth || scene.camera.eyeLookDist);
                     const targetDistance = depth * Math.tan((camera.perspective.fov / 2) * Math.PI / 180.0);
 
                     updates.panDeltaX += (1.5 * xDelta * targetDistance / canvasHeight);
@@ -240,43 +253,18 @@ class MousePanRotateDollyHandler {
                 return;
             }
 
-            mouseMovedOnCanvasSinceLastWheel = true;
         });
 
         document.addEventListener("mouseup", this._documentMouseUpHandler = (e) => {
-            if (!(configs.active && configs.pointerEnabled)) {
-                return;
-            }
             switch (e.which) {
                 case 1: // Left button
-                    mouseDownLeft = false;
-                    mouseDownMiddle = false;
-                    mouseDownRight = false;
-                    keyDown[scene.input.MOUSE_LEFT_BUTTON] = false;
-                    keyDown[scene.input.MOUSE_MIDDLE_BUTTON] = false;
-                    keyDown[scene.input.MOUSE_RIGHT_BUTTON] = false;
-                    break;
                 case 2: // Middle/both buttons
-                    mouseDownLeft = false;
-                    mouseDownMiddle = false;
-                    mouseDownRight = false;
-                    keyDown[scene.input.MOUSE_LEFT_BUTTON] = false;
-                    keyDown[scene.input.MOUSE_MIDDLE_BUTTON] = false;
-                    keyDown[scene.input.MOUSE_RIGHT_BUTTON] = false;
-                    break;
                 case 3: // Right button
-                    mouseDownLeft = false;
-                    mouseDownMiddle = false;
-                    mouseDownRight = false;
-                    keyDown[scene.input.MOUSE_LEFT_BUTTON] = false;
-                    keyDown[scene.input.MOUSE_MIDDLE_BUTTON] = false;
-                    keyDown[scene.input.MOUSE_RIGHT_BUTTON] = false;
+                    resetMouseState();
                     break;
                 default:
                     break;
             }
-            xRotateDelta = 0;
-            yRotateDelta = 0;
         });
 
         canvas.addEventListener("mouseup", this._mouseUpHandler = (e) => {
@@ -310,44 +298,42 @@ class MousePanRotateDollyHandler {
             yRotateDelta = 0;
         });
 
-        const maxElapsed = 1 / 20;
-        const minElapsed = 1 / 60;
-
-        let secsNowLast = null;
-
         canvas.addEventListener("wheel", this._mouseWheelHandler = (e) => {
             if (!(configs.active && configs.pointerEnabled && configs.zoomOnMouseWheel && cameraControl._isKeyDownForAction(cameraControl.MOUSE_DOLLY, keyDown))) {
                 return;
             }
-            const secsNow = performance.now() / 1000.0;
-            var secsElapsed = (secsNowLast !== null) ? (secsNow - secsNowLast) : 0;
-            secsNowLast = secsNow;
-            if (secsElapsed > maxElapsed) {
-                secsElapsed = maxElapsed;
-            }
-            if (secsElapsed < minElapsed) {
-                secsElapsed = minElapsed;
-            }
-            const delta = Math.max(-1, Math.min(1, -e.deltaY * 40));
-            if (delta === 0) {
-                return;
-            }
-            const normalizedDelta = delta / Math.abs(delta);
-            updates.dollyDelta += -normalizedDelta * secsElapsed * configs.mouseWheelDollyRate;
-
-            if (mouseMovedOnCanvasSinceLastWheel) {
-                if ((states.pointerCanvasPos[0] === 0) && (states.pointerCanvasPos[1] === 0)) {
-                    // Dirty fix to initiate states.pointerCanvasPos if a wheel over an empty space is the first action in a scene
-                    getCanvasPosFromEvent(e, canvas, states.pointerCanvasPos); // Added to fix XCD-386: The zoom speed slows down when zooming into an empty space for the first time on a relatively large model, and it cannot be reset without reloading
+            if (configs.followPointer) {
+                const normalizedDelta = normalizeWheelDelta(e.deltaY, e.deltaMode, canvas.clientHeight);
+                if (normalizedDelta === 0) {
+                    return;
                 }
-                states.followPointerDirty = true;
-                mouseMovedOnCanvasSinceLastWheel = false;
+                if ((states.pointerCanvasPos[0] === 0) && (states.pointerCanvasPos[1] === 0)) {
+                    getCanvasPosFromEvent(e, canvas, states.pointerCanvasPos);
+                }
+                updates.dollyDelta += normalizedDelta * configs.mouseWheelDollyRate / 6000;
+                updates.dollyTimestamp = e.timeStamp;
+                updates.dollyLastEventTime = performance.now();
+                updates.dollyInputSource = "wheel";
+                if (!updates.dollyCanvasPos) {
+                    updates.dollyCanvasPos = math.vec2();
+                }
+                updates.dollyCanvasPos.set(states.pointerCanvasPos);
+            } else {
+                const secsNow = performance.now() / 1000.0;
+                let secsElapsed = (secsNowLast !== null) ? (secsNow - secsNowLast) : 0;
+                secsNowLast = secsNow;
+                secsElapsed = Math.max(1 / 60, Math.min(1 / 20, secsElapsed));
+                const delta = Math.max(-1, Math.min(1, -e.deltaY * 40));
+                if (delta !== 0) {
+                    updates.dollyDelta += -(delta / Math.abs(delta)) * secsElapsed * configs.mouseWheelDollyRate;
+                }
             }
 
         }, {passive: true});
     }
 
     reset() {
+        this._resetTransientState();
     }
 
     destroy() {

@@ -4,6 +4,7 @@ import {CameraFlightAnimation} from './../camera/CameraFlightAnimation.js';
 import {PanController} from "./lib/controllers/PanController.js";
 import {PivotController} from "./lib/controllers/PivotController.js";
 import {PickController} from "./lib/controllers/PickController.js";
+import {NavigationContextController} from "./lib/controllers/NavigationContextController.js";
 import {MousePanRotateDollyHandler} from "./lib/handlers/MousePanRotateDollyHandler.js";
 import {KeyboardAxisViewHandler} from "./lib/handlers/KeyboardAxisViewHandler.js";
 import {MousePickHandler} from "./lib/handlers/MousePickHandler.js";
@@ -791,18 +792,26 @@ class CameraControl extends Component {
             panDeltaX: 0,
             panDeltaY: 0,
             panDeltaZ: 0,
-            dollyDelta: 0
+            dollyDelta: 0,
+            dollyTimestamp: null,
+            dollyLastEventTime: null,
+            dollyCanvasPos: math.vec2(),
+            dollyInputSource: null
         };
 
         // Controllers to assist input event handlers with controlling the Camera
 
         const scene = this.scene;
 
+        const pickController = new PickController(this, this._configs);
+        const pivotController = new PivotController(scene, this._configs);
+
         this._controllers = {
             cameraControl: this,
-            pickController: new PickController(this, this._configs),
-            pivotController: new PivotController(scene, this._configs),
+            pickController,
+            pivotController,
             panController: new PanController(scene),
+            navigationContextController: new NavigationContextController(scene, pickController, pivotController),
             cameraFlight: new CameraFlightAnimation(this, {
                 duration: 0.5
             })
@@ -1042,6 +1051,9 @@ class CameraControl extends Component {
      */
     set active(value) {
         value = value !== false;
+        if (!value && this._handlers) {
+            this._reset();
+        }
         this._configs.active = value;
         this._handlers[1]._active = value;
         this._handlers[5]._active = value;
@@ -1155,6 +1167,7 @@ class CameraControl extends Component {
             this.error("Unsupported value for navMode: " + navMode + " - supported values are 'orbit', 'firstPerson' and 'planView' - defaulting to 'orbit'");
             navMode = "orbit";
         }
+        this._controllers.navigationContextController.reset("nav-mode");
         this._configs.firstPerson = (navMode === "firstPerson");
         this._configs.planView = (navMode === "planView");
         if (this._configs.firstPerson || this._configs.planView) {
@@ -1229,9 +1242,14 @@ class CameraControl extends Component {
 
         this._updates.panDeltaX = 0;
         this._updates.panDeltaY = 0;
+        this._updates.panDeltaZ = 0;
         this._updates.rotateDeltaX = 0;
         this._updates.rotateDeltaY = 0;
-        this._updates.dolyDelta = 0;
+        this._updates.dollyDelta = 0;
+        this._updates.dollyTimestamp = null;
+        this._updates.dollyLastEventTime = null;
+        this._updates.dollyInputSource = null;
+        this._controllers.navigationContextController.reset("camera-control-reset");
     }
 
     /**
@@ -1265,6 +1283,9 @@ class CameraControl extends Component {
      */
     set followPointer(value) {
         this._configs.followPointer = (value !== false);
+        if (!this._configs.followPointer && this._controllers) {
+            this._controllers.navigationContextController.reset("follow-pointer-disabled");
+        }
     }
 
     /**
@@ -1294,7 +1315,7 @@ class CameraControl extends Component {
      * @param {Number[]} worldPos The new World-space 3D target position.
      */
     set pivotPos(worldPos) {
-        this._controllers.pivotController.setPivotPos(worldPos);
+        this._controllers.navigationContextController.establishNavigationPivot(worldPos, "api");
     }
 
     /**
@@ -1356,6 +1377,7 @@ class CameraControl extends Component {
      * @deprecated
      */
     set planView(value) {
+        this._controllers.navigationContextController.reset("plan-view");
         this._configs.planView = !!value;
         this._configs.firstPerson = false;
         if (this._configs.planView) {
@@ -1396,6 +1418,7 @@ class CameraControl extends Component {
      */
     set firstPerson(value) {
         this.warn("firstPerson property is deprecated - replaced with navMode");
+        this._controllers.navigationContextController.reset("first-person");
         this._configs.firstPerson = !!value;
         this._configs.planView = false;
         if (this._configs.firstPerson) {
@@ -1973,8 +1996,13 @@ class CameraControl extends Component {
     }
 
     _destroyControllers() {
-        for (let i = 0, len = this._controllers.length; i < len; i++) {
-            const controller = this._controllers[i];
+        this._controllers.navigationContextController.reset("destroy");
+        const controllers = Object.values(this._controllers);
+        for (let i = 0, len = controllers.length; i < len; i++) {
+            const controller = controllers[i];
+            if (controller === this || controller === this._controllers.navigationContextController) {
+                continue;
+            }
             if (controller.destroy) {
                 controller.destroy();
             }
