@@ -1,11 +1,11 @@
 /**
  * xeokit-sdk v2.6.112
- *  Commit: efbfed3539a700c5404e199be74181a5b9433fc5
- *  Built: 2026-07-31T08:59:13.920Z
+ *  Commit: 3a1bf9354ee605f2a878be784ff541141e81d4fc
+ *  Built: 2026-08-13T03:30:21.494Z
  */
 
 if (typeof window !== 'undefined') {
-    window.__XEOKIT__ = { version: '2.6.112', commit: 'efbfed3539a700c5404e199be74181a5b9433fc5', built: '2026-07-31T08:59:13.920Z' };
+    window.__XEOKIT__ = { version: '2.6.112', commit: '3a1bf9354ee605f2a878be784ff541141e81d4fc', built: '2026-08-13T03:30:21.494Z' };
 }
 
 'use strict';
@@ -57845,6 +57845,25 @@ class PickController {
         this.schedulePickSurface = false;
     }
 
+    /**
+     * Immediately surface-picks for a new navigation gesture.
+     *
+     * This intentionally bypasses hover-result caching because scene state may
+     * have changed while the pointer remained at the same canvas position.
+     *
+     * @private
+     */
+    pickSurface(canvasPos) {
+        if (!this._configs.pointerEnabled) {
+            return null;
+        }
+        return this._scene.pick({
+            pickSurface: true,
+            pickSurfaceNormal: false,
+            canvasPos
+        });
+    }
+
     fireEvents() {
 
         if (this._needFireEvents === 0) {
@@ -57920,6 +57939,527 @@ class PickController {
     }
 }
 
+const WHEEL_PIXELS_PER_LINE = 16;
+const WHEEL_SESSION_GAP_MS = 160;
+const WHEEL_DELTA_LINE = 1;
+const WHEEL_DELTA_PAGE = 2;
+
+function normalizeWheelDelta(deltaY, deltaMode, canvasHeight) {
+    if (!Number.isFinite(deltaY) || deltaY === 0) {
+        return 0;
+    }
+
+    const pageSize = Math.max(1, Number.isFinite(canvasHeight) ? canvasHeight : 1);
+    let pixelDelta = deltaY;
+
+    if (deltaMode === WHEEL_DELTA_LINE) {
+        pixelDelta *= WHEEL_PIXELS_PER_LINE;
+    } else if (deltaMode === WHEEL_DELTA_PAGE) {
+        pixelDelta *= pageSize;
+    }
+
+    return Math.max(-pageSize, Math.min(pageSize, pixelDelta));
+}
+
+function computeZoomDelta(delta, distance, proximityThreshold, minimumFactor, crossed = false) {
+    if (!Number.isFinite(delta)
+        || delta === 0
+        || !Number.isFinite(distance)
+        || distance < 0
+        || (!crossed && distance === 0)) {
+        return 0;
+    }
+    const threshold = Math.max(MIN_NORMALIZATION_DENOMINATOR, proximityThreshold);
+    const minFactor = Math.max(0, minimumFactor);
+    const factor = crossed ? minFactor : Math.max(minFactor, distance / threshold);
+    const baseStep = Math.abs(delta) * factor;
+
+    if (delta < 0) {
+        if (!crossed && baseStep >= distance) {
+            return -(distance + Math.abs(delta) * minFactor);
+        }
+        return -baseStep;
+    }
+    const outwardStep = baseStep * 1.25;
+    return crossed ? outwardStep : Math.min(outwardStep, distance);
+}
+
+const MIN_NORMALIZATION_DENOMINATOR = 1e-9;
+
+const EXPANDED_VIEWPORT_FACTOR = 1.5;
+const MIN_DISTANCE = 1e-9;
+const rayOrigin = math.vec3();
+const rayDirection = math.vec3();
+
+function copyVec2(value) {
+    return value ? [value[0], value[1]] : null;
+}
+
+function copyVec3(value) {
+    return value ? [value[0], value[1], value[2]] : null;
+}
+
+function isFiniteVec3(value) {
+    return value && Number.isFinite(value[0]) && Number.isFinite(value[1]) && Number.isFinite(value[2]);
+}
+
+function distance$1(a, b) {
+    const x = a[0] - b[0];
+    const y = a[1] - b[1];
+    const z = a[2] - b[2];
+    return Math.sqrt(x * x + y * y + z * z);
+}
+
+function dotFromEye(camera, worldPos) {
+    const viewX = camera.look[0] - camera.eye[0];
+    const viewY = camera.look[1] - camera.eye[1];
+    const viewZ = camera.look[2] - camera.eye[2];
+    const viewLength = Math.sqrt(viewX * viewX + viewY * viewY + viewZ * viewZ);
+    if (viewLength <= MIN_DISTANCE) {
+        return -1;
+    }
+    return ((worldPos[0] - camera.eye[0]) * viewX
+        + (worldPos[1] - camera.eye[1]) * viewY
+        + (worldPos[2] - camera.eye[2]) * viewZ) / viewLength;
+}
+
+function dotFromOrigin(origin, worldPos, direction) {
+    return (worldPos[0] - origin[0]) * direction[0]
+        + (worldPos[1] - origin[1]) * direction[1]
+        + (worldPos[2] - origin[2]) * direction[2];
+}
+
+/**
+ * Owns private mouse-navigation context for CameraControl.
+ *
+ * @private
+ */
+class NavigationContextController {
+
+    constructor(scene, pickController, pivotController) {
+        this._scene = scene;
+        this._pickController = pickController;
+        this._pivotController = pivotController;
+        this._zoomAnchor = null;
+        this._zoomAnchorResolved = false;
+        this._lastValidHit = null;
+        this._navigationPivot = null;
+        this._lastZoomTimestamp = null;
+        this._zoomSessionCanvasPos = null;
+        this._eventHandles = [
+            scene.on("objectVisibility", (entity) => this._onObjectVisibility(entity)),
+            scene.on("modelLoaded", () => this._invalidateResolvedNoAnchor()),
+            scene.on("modelUnloaded", (modelId) => this._onModelUnloaded(modelId)),
+            scene.on("sectionPlaneCreated", () => this._onSectionPlanesChanged()),
+            scene.on("sectionPlaneUpdated", () => this._onSectionPlanesChanged()),
+            scene.on("sectionPlaneDestroyed", () => this._onSectionPlanesChanged())
+        ];
+    }
+
+    beginOrContinueZoom(canvasPos, timestamp) {
+        const newSession = this._lastZoomTimestamp === null
+            || !Number.isFinite(timestamp)
+            || timestamp < this._lastZoomTimestamp
+            || timestamp - this._lastZoomTimestamp >= WHEEL_SESSION_GAP_MS;
+
+        this._lastZoomTimestamp = timestamp;
+
+        if (newSession) {
+            this._zoomSessionCanvasPos = copyVec2(canvasPos);
+        }
+
+        if (!newSession && this._zoomAnchorResolved) {
+            if (this._zoomAnchor === null || this._isRecordValid(this._zoomAnchor, this._zoomAnchor.crossed)) {
+                return this._zoomAnchor;
+            }
+        }
+
+        if (newSession) {
+            const pickResult = this._pickController.pickSurface(canvasPos);
+            const hit = this._copyHit(pickResult, canvasPos);
+            if (this._isRecordValid(hit)) {
+                this._lastValidHit = hit;
+                this._zoomAnchor = hit;
+                this._zoomAnchorResolved = true;
+                return this._zoomAnchor;
+            }
+        }
+
+        this._zoomAnchor = this._resolveFallback(this._zoomSessionCanvasPos || canvasPos);
+        this._zoomAnchorResolved = true;
+        return this._zoomAnchor;
+    }
+
+    resolvePanReference(canvasPos) {
+        const pickResult = this._pickController.pickSurface(canvasPos);
+        const hit = this._copyHit(pickResult, canvasPos);
+        if (this._isRecordValid(hit)) {
+            this._lastValidHit = hit;
+            this.establishNavigationPivot(hit.worldPos, "pan", hit);
+            return {
+                worldPos: copyVec3(hit.worldPos),
+                depth: hit.depth,
+                source: "cursor-hit"
+            };
+        }
+
+        const fallback = this._resolveFallback(canvasPos);
+        if (fallback) {
+            return {
+                worldPos: copyVec3(fallback.worldPos),
+                depth: fallback.depth,
+                source: fallback.source
+            };
+        }
+
+        return {
+            worldPos: null,
+            depth: this._eyeLookDistance(),
+            source: "camera-look-depth"
+        };
+    }
+
+    resolveOrbitReference(canvasPos) {
+        return this._resolveFallback(canvasPos);
+    }
+
+    markZoomAnchorCrossed() {
+        if (this._zoomAnchor) {
+            this._zoomAnchor.crossed = true;
+        }
+    }
+
+    establishNavigationPivot(worldPos, reason, sourceRecord) {
+        if (!isFiniteVec3(worldPos)) {
+            return null;
+        }
+        const entity = sourceRecord && sourceRecord.entity ? sourceRecord.entity : null;
+        this._navigationPivot = {
+            worldPos: copyVec3(worldPos),
+            canvasPos: null,
+            depth: sourceRecord && Number.isFinite(sourceRecord.depth) ? sourceRecord.depth : null,
+            rayDirection: sourceRecord && isFiniteVec3(sourceRecord.rayDirection) ? copyVec3(sourceRecord.rayDirection) : null,
+            source: "navigation-pivot",
+            reason,
+            entityId: entity ? entity.id : null,
+            modelId: entity && entity.isSceneModelEntity && entity.model ? entity.model.id : null,
+            entity
+        };
+        this._pivotController.setPivotPos(this._navigationPivot.worldPos);
+        return this._navigationPivot;
+    }
+
+    translateNavigationPivot(worldDelta) {
+        if (!this._navigationPivot || !isFiniteVec3(worldDelta)) {
+            return;
+        }
+        const worldPos = this._navigationPivot.worldPos;
+        worldPos[0] += worldDelta[0];
+        worldPos[1] += worldDelta[1];
+        worldPos[2] += worldDelta[2];
+        this._pivotController.setPivotPos(worldPos);
+    }
+
+    reset(reason) {
+        this._zoomAnchor = null;
+        this._zoomAnchorResolved = false;
+        this._lastValidHit = null;
+        this._navigationPivot = null;
+        this._lastZoomTimestamp = null;
+        this._zoomSessionCanvasPos = null;
+        if (reason === "destroy") {
+            for (let i = 0, len = this._eventHandles.length; i < len; i++) {
+                this._scene.off(this._eventHandles[i]);
+            }
+            this._eventHandles.length = 0;
+            this._scene = null;
+            this._pickController = null;
+            this._pivotController = null;
+        }
+    }
+
+    _copyHit(pickResult, canvasPos) {
+        if (!pickResult || !isFiniteVec3(pickResult.worldPos)) {
+            return null;
+        }
+        const entity = pickResult.entity || null;
+        const hasRay = this._worldRay(canvasPos);
+        const signedDepth = hasRay ? dotFromOrigin(this._scene.camera.eye, pickResult.worldPos, rayDirection) : null;
+        const depth = Number.isFinite(signedDepth)
+            ? signedDepth
+            : distance$1(this._scene.camera.eye, pickResult.worldPos);
+        return {
+            worldPos: copyVec3(pickResult.worldPos),
+            canvasPos: copyVec2(canvasPos),
+            depth,
+            rayDirection: hasRay ? copyVec3(rayDirection) : null,
+            source: "cursor-hit",
+            entityId: entity ? entity.id : null,
+            modelId: entity && entity.isSceneModelEntity && entity.model ? entity.model.id : null,
+            entity,
+            crossed: false
+        };
+    }
+
+    _isRecordValid(record, allowBehind = false) {
+        if (!record || !isFiniteVec3(record.worldPos)) {
+            return false;
+        }
+        if (record.entity && record.entity.visible === false) {
+            return false;
+        }
+        if (record.entity && record.entity.destroyed) {
+            return false;
+        }
+        if (record.entityId && record.entity.isObject && this._scene.objects && this._scene.objects[record.entityId] !== record.entity) {
+            return false;
+        }
+        if (record.invalidated || this._isClipped(record)) {
+            return false;
+        }
+        if (allowBehind && record.crossed && distance$1(this._scene.camera.eye, record.worldPos) <= MIN_DISTANCE) {
+            return true;
+        }
+        return distance$1(this._scene.camera.eye, record.worldPos) > MIN_DISTANCE
+            && (allowBehind || dotFromEye(this._scene.camera, record.worldPos) > MIN_DISTANCE);
+    }
+
+    _resolveFallback(canvasPos) {
+        if (this._isRecordValid(this._navigationPivot)) {
+            const pivot = this._pointerRayRecord(canvasPos, this._navigationPivot, "navigation-pivot");
+            if (pivot) {
+                return pivot;
+            }
+        }
+        if (this._isRecordValid(this._lastValidHit)) {
+            const lastHit = this._pointerRayRecord(canvasPos, this._lastValidHit, "last-valid-hit");
+            if (lastHit) {
+                return lastHit;
+            }
+        }
+
+        const boundsDepthRecord = this._visibleBoundsDepthRecord();
+        const boundsRecord = boundsDepthRecord
+            ? this._pointerRayRecord(canvasPos, boundsDepthRecord, "visible-bounds")
+            : null;
+        if (boundsRecord) {
+            return boundsRecord;
+        }
+        const cameraDepthRecord = this._cameraLookDepthRecord();
+        return cameraDepthRecord
+            ? this._pointerRayRecord(canvasPos, cameraDepthRecord, "camera-look-depth")
+            : null;
+    }
+
+    _pointerRayRecord(canvasPos, depthRecord, source) {
+        const depth = this._longitudinalDepth(depthRecord);
+        if (!Number.isFinite(depth) || depth <= MIN_DISTANCE) {
+            return null;
+        }
+        if (!this._worldRay(canvasPos)) {
+            return null;
+        }
+        const originDepth = dotFromOrigin(this._scene.camera.eye, rayOrigin, rayDirection);
+        const rayDepth = depth - originDepth;
+        const worldPos = [
+            rayOrigin[0] + rayDirection[0] * rayDepth,
+            rayOrigin[1] + rayDirection[1] * rayDepth,
+            rayOrigin[2] + rayDirection[2] * rayDepth
+        ];
+        const record = {
+            worldPos,
+            canvasPos: copyVec2(canvasPos),
+            depth,
+            rayDirection: copyVec3(rayDirection),
+            source,
+            entityId: depthRecord.entityId || null,
+            modelId: depthRecord.modelId || null,
+            entity: depthRecord.entity || null,
+            crossed: false
+        };
+        return this._isClipped(record) ? null : record;
+    }
+
+    _worldRay(canvasPos) {
+        math.canvasPosToWorldRay(
+            this._scene.canvas.canvas,
+            this._scene.camera.viewMatrix,
+            this._scene.camera.projMatrix,
+            this._scene.camera.projection,
+            canvasPos,
+            rayOrigin,
+            rayDirection
+        );
+        return isFiniteVec3(rayOrigin) && isFiniteVec3(rayDirection);
+    }
+
+    _longitudinalDepth(record) {
+        if (Number.isFinite(record.depth) && record.depth > MIN_DISTANCE) {
+            return record.depth;
+        }
+        const depth = dotFromEye(this._scene.camera, record.worldPos);
+        return Number.isFinite(depth) && depth > MIN_DISTANCE
+            ? depth
+            : distance$1(this._scene.camera.eye, record.worldPos);
+    }
+
+    _visibleBoundsDepthRecord() {
+        if (this._scene.numVisibleObjects <= 0) {
+            return null;
+        }
+        const aabb = this._scene.getAABB(this._scene.visibleObjectIds);
+        if (!aabb || aabb.length < 6) {
+            return null;
+        }
+        const worldPos = [
+            (aabb[0] + aabb[3]) * 0.5,
+            (aabb[1] + aabb[4]) * 0.5,
+            (aabb[2] + aabb[5]) * 0.5
+        ];
+        if (!this._isRecordValid({worldPos})) {
+            return null;
+        }
+
+        const projected = this._scene.camera.projectWorldPos(worldPos);
+        const canvas = this._scene.canvas.canvas;
+        const xMargin = canvas.clientWidth * (EXPANDED_VIEWPORT_FACTOR - 1) * 0.5;
+        const yMargin = canvas.clientHeight * (EXPANDED_VIEWPORT_FACTOR - 1) * 0.5;
+        if (!projected
+            || !Number.isFinite(projected[0])
+            || !Number.isFinite(projected[1])
+            || projected[0] < -xMargin
+            || projected[0] > canvas.clientWidth + xMargin
+            || projected[1] < -yMargin
+            || projected[1] > canvas.clientHeight + yMargin) {
+            return null;
+        }
+        return {worldPos};
+    }
+
+    _cameraLookDepthRecord() {
+        const camera = this._scene.camera;
+        const viewX = camera.look[0] - camera.eye[0];
+        const viewY = camera.look[1] - camera.eye[1];
+        const viewZ = camera.look[2] - camera.eye[2];
+        const viewLength = Math.sqrt(viewX * viewX + viewY * viewY + viewZ * viewZ) || 1;
+        const dirX = viewX / viewLength;
+        const dirY = viewY / viewLength;
+        const dirZ = viewZ / viewLength;
+        let lowerDepth = MIN_DISTANCE;
+        let upperDepth = Number.POSITIVE_INFINITY;
+        const sectionPlanes = this._scene.sectionPlanes;
+        for (const id in sectionPlanes) {
+            if (!Object.prototype.hasOwnProperty.call(sectionPlanes, id) || !sectionPlanes[id].active) {
+                continue;
+            }
+            const plane = sectionPlanes[id];
+            const eyeDistance = (camera.eye[0] - plane.pos[0]) * plane.dir[0]
+                + (camera.eye[1] - plane.pos[1]) * plane.dir[1]
+                + (camera.eye[2] - plane.pos[2]) * plane.dir[2];
+            const directionDot = dirX * plane.dir[0] + dirY * plane.dir[1] + dirZ * plane.dir[2];
+            if (Math.abs(directionDot) <= MIN_DISTANCE) {
+                if (eyeDistance < 0) {
+                    return null;
+                }
+                continue;
+            }
+            const intersectionDepth = -eyeDistance / directionDot;
+            const margin = Math.max(MIN_DISTANCE, Math.abs(intersectionDepth) * 1e-6);
+            if (directionDot > 0) {
+                lowerDepth = Math.max(lowerDepth, intersectionDepth + margin);
+            } else {
+                upperDepth = Math.min(upperDepth, intersectionDepth - margin);
+            }
+        }
+        if (lowerDepth > upperDepth) {
+            return null;
+        }
+        let depth = this._eyeLookDistance();
+        if (depth < lowerDepth) {
+            depth = lowerDepth;
+        }
+        if (depth > upperDepth) {
+            depth = lowerDepth + (upperDepth - lowerDepth) * 0.8;
+        }
+        const record = {
+            worldPos: [
+                camera.eye[0] + dirX * depth,
+                camera.eye[1] + dirY * depth,
+                camera.eye[2] + dirZ * depth
+            ],
+            depth
+        };
+        if (this._isClipped(record)) {
+            return null;
+        }
+        return record;
+    }
+
+    _eyeLookDistance() {
+        const camera = this._scene.camera;
+        return Math.max(MIN_DISTANCE, Number.isFinite(camera.eyeLookDist)
+            ? camera.eyeLookDist
+            : distance$1(camera.eye, camera.look));
+    }
+
+    _onObjectVisibility(entity) {
+        this._invalidateResolvedNoAnchor();
+        if (!entity || entity.visible !== false) {
+            return;
+        }
+        this._invalidateRecords((record) => record.entityId === entity.id);
+    }
+
+    _onModelUnloaded(modelId) {
+        this._invalidateResolvedNoAnchor();
+        this._invalidateRecords((record) => record.modelId === modelId);
+    }
+
+    _onSectionPlanesChanged() {
+        this._invalidateResolvedNoAnchor();
+        this._invalidateRecords((record) => this._isClipped(record));
+    }
+
+    _invalidateResolvedNoAnchor() {
+        if (this._zoomAnchor === null) {
+            this._zoomAnchorResolved = false;
+        }
+    }
+
+    _invalidateRecords(predicate) {
+        const records = [this._zoomAnchor, this._lastValidHit, this._navigationPivot];
+        for (let i = 0, len = records.length; i < len; i++) {
+            const record = records[i];
+            if (record && predicate(record)) {
+                record.invalidated = true;
+            }
+        }
+    }
+
+    _isClipped(record) {
+        if (record.entity && record.entity.clippable === false) {
+            return false;
+        }
+        const sectionPlanes = this._scene.sectionPlanes;
+        for (const id in sectionPlanes) {
+            if (!Object.prototype.hasOwnProperty.call(sectionPlanes, id)) {
+                continue;
+            }
+            const plane = sectionPlanes[id];
+            if (!plane.active) {
+                continue;
+            }
+            const dx = record.worldPos[0] - plane.pos[0];
+            const dy = record.worldPos[1] - plane.pos[1];
+            const dz = record.worldPos[2] - plane.pos[2];
+            if (dx * plane.dir[0] + dy * plane.dir[1] + dz * plane.dir[2] < 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+}
+
 /**
  * @private
  */
@@ -57948,7 +58488,7 @@ class MousePanRotateDollyHandler {
 
         this._scene = scene;
 
-        const pickController = controllers.pickController;
+        const navigationContextController = controllers.navigationContextController;
         const cameraControl = controllers.cameraControl;
 
         let lastX = 0;
@@ -57960,14 +58500,28 @@ class MousePanRotateDollyHandler {
         let mouseDownMiddle;
         let mouseDownRight;
 
-        let mouseDownPicked = false;
-        const pickedWorldPos = math.vec3();
-
-        let mouseMovedOnCanvasSinceLastWheel = true;
+        let panReferenceDepth = null;
+        let secsNowLast = null;
 
         const canvas = this._scene.canvas.canvas;
 
         const keyDown = [];
+
+        const resetMouseState = () => {
+            mouseDownLeft = false;
+            mouseDownMiddle = false;
+            mouseDownRight = false;
+            keyDown[scene.input.MOUSE_LEFT_BUTTON] = false;
+            keyDown[scene.input.MOUSE_MIDDLE_BUTTON] = false;
+            keyDown[scene.input.MOUSE_RIGHT_BUTTON] = false;
+            panReferenceDepth = null;
+        };
+
+        this._resetTransientState = () => {
+            resetMouseState();
+            keyDown.splice(0);
+            secsNowLast = null;
+        };
 
         document.addEventListener("keydown", this._documentKeyDownHandler = (e) => {
             if (!(configs.active && configs.pointerEnabled) || (!scene.input.keyboardEnabled)) {
@@ -58009,15 +58563,11 @@ class MousePanRotateDollyHandler {
         }
 
         function setMousedownPick() {
-            pickController.pickCursorPos = states.pointerCanvasPos;
-            pickController.schedulePickSurface = true;
-            pickController.update();
-
-            if (pickController.picked && pickController.pickedSurface && pickController.pickResult && pickController.pickResult.worldPos) {
-                mouseDownPicked = true;
-                pickedWorldPos.set(pickController.pickResult.worldPos);
+            if (configs.followPointer && navigationContextController) {
+                const panReference = navigationContextController.resolvePanReference(states.pointerCanvasPos);
+                panReferenceDepth = panReference.depth;
             } else {
-                mouseDownPicked = false;
+                panReferenceDepth = null;
             }
         }
 
@@ -58113,7 +58663,7 @@ class MousePanRotateDollyHandler {
 
                 if (camera.projection === "perspective") {
 
-                    const depth = Math.abs(mouseDownPicked ? math.lenVec3(math.subVec3(pickedWorldPos, scene.camera.eye, [])) : scene.camera.eyeLookDist);
+                    const depth = Math.abs(panReferenceDepth || scene.camera.eyeLookDist);
                     const targetDistance = depth * Math.tan((camera.perspective.fov / 2) * Math.PI / 180.0);
 
                     updates.panDeltaX += (1.5 * xDelta * targetDistance / canvasHeight);
@@ -58154,37 +58704,14 @@ class MousePanRotateDollyHandler {
                 return;
             }
 
-            mouseMovedOnCanvasSinceLastWheel = true;
         });
 
         document.addEventListener("mouseup", this._documentMouseUpHandler = (e) => {
-            if (!(configs.active && configs.pointerEnabled)) {
-                return;
-            }
             switch (e.which) {
                 case 1: // Left button
-                    mouseDownLeft = false;
-                    mouseDownMiddle = false;
-                    mouseDownRight = false;
-                    keyDown[scene.input.MOUSE_LEFT_BUTTON] = false;
-                    keyDown[scene.input.MOUSE_MIDDLE_BUTTON] = false;
-                    keyDown[scene.input.MOUSE_RIGHT_BUTTON] = false;
-                    break;
                 case 2: // Middle/both buttons
-                    mouseDownLeft = false;
-                    mouseDownMiddle = false;
-                    mouseDownRight = false;
-                    keyDown[scene.input.MOUSE_LEFT_BUTTON] = false;
-                    keyDown[scene.input.MOUSE_MIDDLE_BUTTON] = false;
-                    keyDown[scene.input.MOUSE_RIGHT_BUTTON] = false;
-                    break;
                 case 3: // Right button
-                    mouseDownLeft = false;
-                    mouseDownMiddle = false;
-                    mouseDownRight = false;
-                    keyDown[scene.input.MOUSE_LEFT_BUTTON] = false;
-                    keyDown[scene.input.MOUSE_MIDDLE_BUTTON] = false;
-                    keyDown[scene.input.MOUSE_RIGHT_BUTTON] = false;
+                    resetMouseState();
                     break;
             }
         });
@@ -58216,44 +58743,42 @@ class MousePanRotateDollyHandler {
             }
         });
 
-        const maxElapsed = 1 / 20;
-        const minElapsed = 1 / 60;
-
-        let secsNowLast = null;
-
         canvas.addEventListener("wheel", this._mouseWheelHandler = (e) => {
             if (!(configs.active && configs.pointerEnabled && configs.zoomOnMouseWheel && cameraControl._isKeyDownForAction(cameraControl.MOUSE_DOLLY, keyDown))) {
                 return;
             }
-            const secsNow = performance.now() / 1000.0;
-            var secsElapsed = (secsNowLast !== null) ? (secsNow - secsNowLast) : 0;
-            secsNowLast = secsNow;
-            if (secsElapsed > maxElapsed) {
-                secsElapsed = maxElapsed;
-            }
-            if (secsElapsed < minElapsed) {
-                secsElapsed = minElapsed;
-            }
-            const delta = Math.max(-1, Math.min(1, -e.deltaY * 40));
-            if (delta === 0) {
-                return;
-            }
-            const normalizedDelta = delta / Math.abs(delta);
-            updates.dollyDelta += -normalizedDelta * secsElapsed * configs.mouseWheelDollyRate;
-
-            if (mouseMovedOnCanvasSinceLastWheel) {
-                if ((states.pointerCanvasPos[0] === 0) && (states.pointerCanvasPos[1] === 0)) {
-                    // Dirty fix to initiate states.pointerCanvasPos if a wheel over an empty space is the first action in a scene
-                    getCanvasPosFromEvent$3(e, canvas, states.pointerCanvasPos); // Added to fix XCD-386: The zoom speed slows down when zooming into an empty space for the first time on a relatively large model, and it cannot be reset without reloading
+            if (configs.followPointer) {
+                const normalizedDelta = normalizeWheelDelta(e.deltaY, e.deltaMode, canvas.clientHeight);
+                if (normalizedDelta === 0) {
+                    return;
                 }
-                states.followPointerDirty = true;
-                mouseMovedOnCanvasSinceLastWheel = false;
+                if ((states.pointerCanvasPos[0] === 0) && (states.pointerCanvasPos[1] === 0)) {
+                    getCanvasPosFromEvent$3(e, canvas, states.pointerCanvasPos);
+                }
+                updates.dollyDelta += normalizedDelta * configs.mouseWheelDollyRate / 6000;
+                updates.dollyTimestamp = e.timeStamp;
+                updates.dollyLastEventTime = performance.now();
+                updates.dollyInputSource = "wheel";
+                if (!updates.dollyCanvasPos) {
+                    updates.dollyCanvasPos = math.vec2();
+                }
+                updates.dollyCanvasPos.set(states.pointerCanvasPos);
+            } else {
+                const secsNow = performance.now() / 1000.0;
+                let secsElapsed = (secsNowLast !== null) ? (secsNow - secsNowLast) : 0;
+                secsNowLast = secsNow;
+                secsElapsed = Math.max(1 / 60, Math.min(1 / 20, secsElapsed));
+                const delta = Math.max(-1, Math.min(1, -e.deltaY * 40));
+                if (delta !== 0) {
+                    updates.dollyDelta += -(delta / Math.abs(delta)) * secsElapsed * configs.mouseWheelDollyRate;
+                }
             }
 
         }, {passive: true});
     }
 
     reset() {
+        this._resetTransientState();
     }
 
     destroy() {
@@ -58365,9 +58890,9 @@ class KeyboardAxisViewHandler {
                 tempCameraTarget.up.set(math.normalizeVec3(math.mulVec3Scalar(camera.worldForward, -1, tempVec3b$4)));
             }
 
-            if ((!configs.firstPerson) && configs.followPointer) {
-                controllers.pivotController.setPivotPos(center);
-            }
+            controllers.navigationContextController.reset("axis-view");
+            controllers.pivotController.endPivot();
+            controllers.pivotController.hidePivot();
 
             if (controllers.cameraFlight.duration > 0) {
                 controllers.cameraFlight.flyTo(tempCameraTarget, () => {
@@ -58404,6 +58929,7 @@ class MousePickHandler {
 
         const pickController = controllers.pickController;
         const pivotController = controllers.pivotController;
+        const navigationContextController = controllers.navigationContextController;
         const cameraControl = controllers.cameraControl;
 
         this._clicks = 0;
@@ -58417,6 +58943,7 @@ class MousePickHandler {
         const canvas = this._scene.canvas.canvas;
 
         const flyCameraTo = (pickResult) => {
+            navigationContextController.reset("camera-flight");
             let pos;
             if (pickResult && pickResult.worldPos) {
                 pos = pickResult.worldPos;
@@ -58557,18 +59084,19 @@ class MousePickHandler {
                 if (e.which === 1) {// Left button
                     const pickResult = pickController.pickResult;
                     if (pickResult && pickResult.worldPos) {
-                        pivotController.setPivotPos(pickResult.worldPos);
+                        navigationContextController.establishNavigationPivot(pickResult.worldPos, "orbit", pickResult);
                         pivotController.startPivot();
                         this._lastClickedWorldPos = pickResult.worldPos.slice();
                     } else {
-                        if (configs.smartPivot) {
+                        const orbitReference = navigationContextController.resolveOrbitReference(states.pointerCanvasPos);
+                        if (orbitReference) {
+                            pivotController.setPivotPos(orbitReference.worldPos);
+                        } else if (configs.smartPivot) {
                             pivotController.setCanvasPivotPos(states.pointerCanvasPos);
+                        } else if (this._lastClickedWorldPos) {
+                            pivotController.setPivotPos(this._lastClickedWorldPos);
                         } else {
-                            if (this._lastClickedWorldPos) {
-                                pivotController.setPivotPos(this._lastClickedWorldPos);
-                            } else {
-                                pivotController.setPivotPos(scene.camera.look);
-                            }
+                            pivotController.setPivotPos(scene.camera.look);
                         }
                         pivotController.startPivot();
                     }
@@ -58674,7 +59202,7 @@ class MousePickHandler {
                             cameraControl.fire("pickedSurface", firstClickPickResult, true);
 
                             if ((!configs.firstPerson) && configs.followPointer) {
-                                controllers.pivotController.setPivotPos(firstClickPickResult.worldPos);
+                                navigationContextController.establishNavigationPivot(firstClickPickResult.worldPos, "orbit", firstClickPickResult);
                                 if (controllers.pivotController.startPivot()) {
                                     controllers.pivotController.showPivot();
                                 }
@@ -58713,18 +59241,6 @@ class MousePickHandler {
                     if (configs.doublePickFlyTo) {
 
                         flyCameraTo(pickController.pickResult);
-
-                        if ((!configs.firstPerson) && configs.followPointer) {
-
-                            const pickedEntityAABB = pickController.pickResult.entity.aabb;
-                            const pickedEntityCenterPos = math.getAABB3Center(pickedEntityAABB);
-
-                            controllers.pivotController.setPivotPos(pickedEntityCenterPos);
-
-                            if (controllers.pivotController.startPivot()) {
-                                controllers.pivotController.showPivot();
-                            }
-                        }
                     }
 
                 } else {
@@ -58736,18 +59252,6 @@ class MousePickHandler {
                     if (configs.doublePickFlyTo) {
 
                         flyCameraTo();
-
-                        if ((!configs.firstPerson) && configs.followPointer) {
-
-                            const sceneAABB = scene.aabb;
-                            const sceneCenterPos = math.getAABB3Center(sceneAABB);
-
-                            controllers.pivotController.setPivotPos(sceneCenterPos);
-
-                            if (controllers.pivotController.startPivot()) {
-                                controllers.pivotController.showPivot();
-                            }
-                        }
                     }
                 }
 
@@ -58900,6 +59404,7 @@ class KeyboardPanRotateDollyHandler {
                     } else if (dollyBackwards) {
                         updates.dollyDelta += dollyDelta;
                     }
+                    updates.dollyInputSource = "keyboard";
 
                     if (mouseMovedSinceLastKeyboardDolly) {
                         states.followPointerDirty = true;
@@ -58965,6 +59470,34 @@ class KeyboardPanRotateDollyHandler {
 const SCALE_DOLLY_EACH_FRAME = 1; // Recalculate dolly speed for eye->target distance on each Nth frame
 const EPSILON = 0.001;
 const tempVec3$3 = math.vec3();
+const panDelta = math.vec3();
+const panEyeBefore = math.vec3();
+const panWorldDelta = math.vec3();
+
+function signedAnchorDepth(camera, anchor) {
+    if (anchor && anchor.rayDirection) {
+        const direction = anchor.rayDirection;
+        const signedDepth = (anchor.worldPos[0] - camera.eye[0]) * direction[0]
+            + (anchor.worldPos[1] - camera.eye[1]) * direction[1]
+            + (anchor.worldPos[2] - camera.eye[2]) * direction[2];
+        if (Number.isFinite(signedDepth)) {
+            return signedDepth;
+        }
+    }
+    return null;
+}
+
+function zoomAnchorDistance(camera, anchor) {
+    const signedDepth = signedAnchorDepth(camera, anchor);
+    return signedDepth !== null
+        ? Math.abs(signedDepth)
+        : math.lenVec3(math.subVec3(anchor.worldPos, camera.eye, tempVec3$3));
+}
+
+function crossedZoomAnchor(camera, anchor) {
+    const signedDepth = signedAnchorDepth(camera, anchor);
+    return signedDepth === null || signedDepth <= EPSILON;
+}
 
 /**
  * Handles camera updates on each "tick" that were scheduled by the various controllers.
@@ -58980,6 +59513,7 @@ class CameraUpdater {
         const pickController = controllers.pickController;
         const pivotController = controllers.pivotController;
         const panController = controllers.panController;
+        const navigationContextController = controllers.navigationContextController;
         const cameraControl = controllers.cameraControl;
 
         let countDown = SCALE_DOLLY_EACH_FRAME; // Decrements on each tick
@@ -59021,15 +59555,53 @@ class CameraUpdater {
             //----------------------------------------------------------------------------------------------------------
             // Dolly speed eye->look scaling
             //
-            // If pointer is over an object, then dolly speed is proportional to the distance to that object.
+            // If the pointer has a surface target, then dolly speed is proportional to the distance to that target.
             //
-            // If pointer is not over an object, then dolly speed is proportional to the distance to the last
-            // object the pointer was over. This is so that we can dolly to structures that may have gaps through
-            // which empty background shows, that the pointer may inadvertently be over. In these cases, we don't
-            // want dolly speed wildly varying depending on how accurately the user avoids the gaps with the pointer.
+            // If there is no surface target, then dolly speed is proportional to the current eye->look distance.
+            // This keeps no-hit dollying proportional while the pointer is over background gaps in a structure.
             //----------------------------------------------------------------------------------------------------------
 
-            if (configs.followPointer) {
+            let activeZoomAnchor = null;
+            let dollyDeltaForDist;
+            const hasWheelInput = configs.followPointer
+                && navigationContextController
+                && updates.dollyInputSource === "wheel"
+                && updates.dollyCanvasPos
+                && updates.dollyTimestamp !== null
+                && updates.dollyTimestamp !== undefined;
+            const lastWheelEventTime = Number.isFinite(updates.dollyLastEventTime)
+                ? updates.dollyLastEventTime
+                : performance.now();
+            const usesWheelContext = hasWheelInput
+                && performance.now() - lastWheelEventTime < WHEEL_SESSION_GAP_MS;
+            const expiredWheelContext = hasWheelInput && !usesWheelContext;
+
+            if (usesWheelContext && updates.dollyDelta !== 0) {
+                activeZoomAnchor = navigationContextController.beginOrContinueZoom(
+                    updates.dollyCanvasPos,
+                    updates.dollyTimestamp
+                );
+                if (activeZoomAnchor) {
+                    const distance = zoomAnchorDistance(camera, activeZoomAnchor);
+                    dollyDeltaForDist = computeZoomDelta(
+                        updates.dollyDelta,
+                        distance,
+                        configs.dollyProximityThreshold,
+                        configs.dollyMinSpeed,
+                        activeZoomAnchor.crossed === true
+                    );
+                } else {
+                    updates.dollyDelta *= configs.dollyInertia;
+                    dollyDeltaForDist = 0;
+                }
+
+            } else if (expiredWheelContext) {
+                dollyDistFactor = configs.firstPerson
+                    ? 1.0
+                    : Math.max(configs.dollyMinSpeed, camera.eyeLookDist / configs.dollyProximityThreshold);
+                dollyDeltaForDist = updates.dollyDelta * dollyDistFactor;
+
+            } else if (configs.followPointer) {
 
                 if (--countDown <= 0) {
 
@@ -59048,7 +59620,9 @@ class CameraUpdater {
                                     followPointerWorldPos = pickController.pickResult.worldPos;
                                     
                                 } else {
-                                    dollyDistFactor = 1.0;
+                                    dollyDistFactor = configs.firstPerson
+                                        ? 1.0
+                                        : camera.eyeLookDist / configs.dollyProximityThreshold;
                                     followPointerWorldPos = null;
                                 }
 
@@ -59059,6 +59633,10 @@ class CameraUpdater {
                         if (followPointerWorldPos) {
                             const dist = Math.abs(math.lenVec3(math.subVec3(followPointerWorldPos, scene.camera.eye, tempVec3$3)));
                             dollyDistFactor = dist / configs.dollyProximityThreshold;
+                        } else {
+                            dollyDistFactor = configs.firstPerson
+                                ? 1.0
+                                : camera.eyeLookDist / configs.dollyProximityThreshold;
                         }
 
                         if (dollyDistFactor < configs.dollyMinSpeed) {
@@ -59071,7 +59649,9 @@ class CameraUpdater {
               followPointerWorldPos = null;
             }
 
-            const dollyDeltaForDist = (updates.dollyDelta * dollyDistFactor);
+            if (dollyDeltaForDist === undefined) {
+                dollyDeltaForDist = updates.dollyDelta * dollyDistFactor;
+            }
 
             //----------------------------------------------------------------------------------------------------------
             // Rotation
@@ -59118,11 +59698,11 @@ class CameraUpdater {
 
             if (updates.panDeltaX !== 0 || updates.panDeltaY !== 0 || updates.panDeltaZ !== 0) {
 
-                const vec = math.vec3();
+                panEyeBefore.set(camera.eye);
 
-                vec[0] = updates.panDeltaX;
-                vec[1] = updates.panDeltaY;
-                vec[2] = updates.panDeltaZ;
+                panDelta[0] = updates.panDeltaX;
+                panDelta[1] = updates.panDeltaY;
+                panDelta[2] = updates.panDeltaZ;
 
                 let verticalEye;
                 let verticalLook;
@@ -59140,7 +59720,7 @@ class CameraUpdater {
                         verticalLook = camera.look[2];
                     }
 
-                    camera.pan(vec);
+                    camera.pan(panDelta);
 
                     const eye = camera.eye;
                     const look = camera.look;
@@ -59160,7 +59740,15 @@ class CameraUpdater {
                     camera.look = look;
 
                 } else {
-                    camera.pan(vec);
+                    camera.pan(panDelta);
+                }
+
+                if (navigationContextController) {
+                    const eye = camera.eye;
+                    panWorldDelta[0] = eye[0] - panEyeBefore[0];
+                    panWorldDelta[1] = eye[1] - panEyeBefore[1];
+                    panWorldDelta[2] = eye[2] - panEyeBefore[2];
+                    navigationContextController.translateNavigationPivot(panWorldDelta);
                 }
 
                 cursorType = cameraControl._cursors.pan;
@@ -59175,6 +59763,8 @@ class CameraUpdater {
             //----------------------------------------------------------------------------------------------------------
 
             if (dollyDeltaForDist !== 0) {
+
+                let crossedActiveZoomAnchor = null;
 
                 if (dollyDeltaForDist < 0) {
                     cursorType = cameraControl._cursors.dollyForward;
@@ -59200,10 +59790,16 @@ class CameraUpdater {
                         }
                     }
 
-                    if (configs.followPointer) {
-                        const dolliedThroughSurface = panController.dollyToCanvasPos(followPointerWorldPos, states.pointerCanvasPos, -dollyDeltaForDist);
+                    if (configs.followPointer && !expiredWheelContext) {
+                        const targetWorldPos = activeZoomAnchor ? activeZoomAnchor.worldPos : followPointerWorldPos;
+                        const targetCanvasPos = activeZoomAnchor ? activeZoomAnchor.canvasPos : states.pointerCanvasPos;
+                        const dolliedThroughSurface = panController.dollyToCanvasPos(targetWorldPos, targetCanvasPos, -dollyDeltaForDist);
                         if (dolliedThroughSurface) {
-                            states.followPointerDirty = true;
+                            if (activeZoomAnchor) {
+                                crossedActiveZoomAnchor = activeZoomAnchor;
+                            } else {
+                                states.followPointerDirty = true;
+                            }
                         }
                     } else {
                         camera.pan([0, 0, dollyDeltaForDist]);
@@ -59229,10 +59825,18 @@ class CameraUpdater {
 
                 } else if (configs.planView) {
 
-                    if (configs.followPointer) {
-                        const dolliedThroughSurface = panController.dollyToCanvasPos(followPointerWorldPos, states.pointerCanvasPos, -dollyDeltaForDist);
+                    const targetWorldPos = expiredWheelContext
+                        ? null
+                        : (activeZoomAnchor ? activeZoomAnchor.worldPos : followPointerWorldPos);
+                    const targetCanvasPos = activeZoomAnchor ? activeZoomAnchor.canvasPos : states.pointerCanvasPos;
+                    if (configs.followPointer && targetWorldPos) {
+                        const dolliedThroughSurface = panController.dollyToCanvasPos(targetWorldPos, targetCanvasPos, -dollyDeltaForDist);
                         if (dolliedThroughSurface) {
-                            states.followPointerDirty = true;
+                            if (activeZoomAnchor) {
+                                crossedActiveZoomAnchor = activeZoomAnchor;
+                            } else {
+                                states.followPointerDirty = true;
+                            }
                         }
                     } else {
                         camera.ortho.scale = camera.ortho.scale + dollyDeltaForDist;
@@ -59241,15 +59845,27 @@ class CameraUpdater {
 
                 } else { // Orbiting
 
-                    if (configs.followPointer) {
-                        const dolliedThroughSurface = panController.dollyToCanvasPos(followPointerWorldPos, states.pointerCanvasPos, -dollyDeltaForDist);
+                    const targetWorldPos = expiredWheelContext
+                        ? null
+                        : (activeZoomAnchor ? activeZoomAnchor.worldPos : followPointerWorldPos);
+                    const targetCanvasPos = activeZoomAnchor ? activeZoomAnchor.canvasPos : states.pointerCanvasPos;
+                    if (configs.followPointer && targetWorldPos) {
+                        const dolliedThroughSurface = panController.dollyToCanvasPos(targetWorldPos, targetCanvasPos, -dollyDeltaForDist);
                         if (dolliedThroughSurface) {
-                            states.followPointerDirty = true;
+                            if (activeZoomAnchor) {
+                                crossedActiveZoomAnchor = activeZoomAnchor;
+                            } else {
+                                states.followPointerDirty = true;
+                            }
                         }
                     } else {
                         camera.ortho.scale = camera.ortho.scale + dollyDeltaForDist;
                         camera.zoom(dollyDeltaForDist);
                     }
+                }
+
+                if (crossedActiveZoomAnchor && crossedZoomAnchor(camera, crossedActiveZoomAnchor)) {
+                    navigationContextController.markZoomAnchorCrossed();
                 }
 
                 updates.dollyDelta *= configs.dollyInertia;
@@ -59359,6 +59975,7 @@ class TouchPanRotateAndDollyHandler {
 
         const pickController = controllers.pickController;
         const pivotController = controllers.pivotController;
+        const navigationContextController = controllers.navigationContextController;
 
         const tapStartCanvasPos = math.vec2();
         const tapCanvasPos0 = math.vec2();
@@ -59402,7 +60019,7 @@ class TouchPanRotateAndDollyHandler {
 
                         if (pickController.picked && pickController.pickedSurface && pickController.pickResult && pickController.pickResult.worldPos) {
 
-                            pivotController.setPivotPos(pickController.pickResult.worldPos);
+                            navigationContextController.establishNavigationPivot(pickController.pickResult.worldPos, "orbit", pickController.pickResult);
 
                             if (!configs.firstPerson && pivotController.startPivot()) {
                                 pivotController.showPivot();
@@ -59556,6 +60173,7 @@ class TouchPanRotateAndDollyHandler {
                 const dollyDelta = (d2 - d1) * configs.touchDollyRate;
 
                 updates.dollyDelta = dollyDelta;
+                updates.dollyInputSource = "touch";
                 states.followPointerDirty = true; // Added to fix XCD-386: The zoom speed slows down when zooming into an empty space for the first time on a relatively large model, and it cannot be reset without reloading
 
                 if (Math.abs(dollyDelta) < 1.0) {
@@ -59645,6 +60263,7 @@ class TouchPickHandler {
         const canvas = this._scene.canvas.canvas;
 
         const flyCameraTo = (pickResult) => {
+            controllers.navigationContextController.reset("camera-flight");
             let pos;
             if (pickResult && pickResult.worldPos) {
                 pos = pickResult.worldPos;
@@ -60608,18 +61227,26 @@ class CameraControl extends Component {
             panDeltaX: 0,
             panDeltaY: 0,
             panDeltaZ: 0,
-            dollyDelta: 0
+            dollyDelta: 0,
+            dollyTimestamp: null,
+            dollyLastEventTime: null,
+            dollyCanvasPos: math.vec2(),
+            dollyInputSource: null
         };
 
         // Controllers to assist input event handlers with controlling the Camera
 
         const scene = this.scene;
 
+        const pickController = new PickController(this, this._configs);
+        const pivotController = new PivotController(scene, this._configs);
+
         this._controllers = {
             cameraControl: this,
-            pickController: new PickController(this, this._configs),
-            pivotController: new PivotController(scene, this._configs),
+            pickController,
+            pivotController,
             panController: new PanController(scene),
+            navigationContextController: new NavigationContextController(scene, pickController, pivotController),
             cameraFlight: new CameraFlightAnimation(this, {
                 duration: 0.5
             })
@@ -60859,6 +61486,9 @@ class CameraControl extends Component {
      */
     set active(value) {
         value = value !== false;
+        if (!value && this._handlers) {
+            this._reset();
+        }
         this._configs.active = value;
         this._handlers[1]._active = value;
         this._handlers[5]._active = value;
@@ -60972,6 +61602,7 @@ class CameraControl extends Component {
             this.error("Unsupported value for navMode: " + navMode + " - supported values are 'orbit', 'firstPerson' and 'planView' - defaulting to 'orbit'");
             navMode = "orbit";
         }
+        this._controllers.navigationContextController.reset("nav-mode");
         this._configs.firstPerson = (navMode === "firstPerson");
         this._configs.planView = (navMode === "planView");
         if (this._configs.firstPerson || this._configs.planView) {
@@ -61046,9 +61677,14 @@ class CameraControl extends Component {
 
         this._updates.panDeltaX = 0;
         this._updates.panDeltaY = 0;
+        this._updates.panDeltaZ = 0;
         this._updates.rotateDeltaX = 0;
         this._updates.rotateDeltaY = 0;
-        this._updates.dolyDelta = 0;
+        this._updates.dollyDelta = 0;
+        this._updates.dollyTimestamp = null;
+        this._updates.dollyLastEventTime = null;
+        this._updates.dollyInputSource = null;
+        this._controllers.navigationContextController.reset("camera-control-reset");
     }
 
     /**
@@ -61082,6 +61718,9 @@ class CameraControl extends Component {
      */
     set followPointer(value) {
         this._configs.followPointer = (value !== false);
+        if (!this._configs.followPointer && this._controllers) {
+            this._controllers.navigationContextController.reset("follow-pointer-disabled");
+        }
     }
 
     /**
@@ -61111,7 +61750,7 @@ class CameraControl extends Component {
      * @param {Number[]} worldPos The new World-space 3D target position.
      */
     set pivotPos(worldPos) {
-        this._controllers.pivotController.setPivotPos(worldPos);
+        this._controllers.navigationContextController.establishNavigationPivot(worldPos, "api");
     }
 
     /**
@@ -61173,6 +61812,7 @@ class CameraControl extends Component {
      * @deprecated
      */
     set planView(value) {
+        this._controllers.navigationContextController.reset("plan-view");
         this._configs.planView = !!value;
         this._configs.firstPerson = false;
         if (this._configs.planView) {
@@ -61213,6 +61853,7 @@ class CameraControl extends Component {
      */
     set firstPerson(value) {
         this.warn("firstPerson property is deprecated - replaced with navMode");
+        this._controllers.navigationContextController.reset("first-person");
         this._configs.firstPerson = !!value;
         this._configs.planView = false;
         if (this._configs.firstPerson) {
@@ -61790,8 +62431,13 @@ class CameraControl extends Component {
     }
 
     _destroyControllers() {
-        for (let i = 0, len = this._controllers.length; i < len; i++) {
-            const controller = this._controllers[i];
+        this._controllers.navigationContextController.reset("destroy");
+        const controllers = Object.values(this._controllers);
+        for (let i = 0, len = controllers.length; i < len; i++) {
+            const controller = controllers[i];
+            if (controller === this || controller === this._controllers.navigationContextController) {
+                continue;
+            }
             if (controller.destroy) {
                 controller.destroy();
             }
