@@ -1,11 +1,11 @@
 /**
  * xeokit-sdk v2.6.112
- *  Commit: 3a1bf9354ee605f2a878be784ff541141e81d4fc
- *  Built: 2026-08-13T03:30:21.494Z
+ *  Commit: f86a4866a2b087cbd7a662b3c3a602f83ab17902
+ *  Built: 2026-08-27T08:51:36.348Z
  */
 
 if (typeof window !== 'undefined') {
-    window.__XEOKIT__ = { version: '2.6.112', commit: '3a1bf9354ee605f2a878be784ff541141e81d4fc', built: '2026-08-13T03:30:21.494Z' };
+    window.__XEOKIT__ = { version: '2.6.112', commit: 'f86a4866a2b087cbd7a662b3c3a602f83ab17902', built: '2026-08-27T08:51:36.348Z' };
 }
 
 /** @private */
@@ -32915,7 +32915,7 @@ const MAX_OBJECT_UPDATES_IN_FRAME_WITHOUT_BATCHED_UPDATE = 10;
 
 const tempVec3$5 = math.vec3();
 const tempVec3a$e = math.vec3();
-const tempVec4a$b = math.vec4();
+const tempVec4a$a = math.vec4();
 math.vec4();
 const tempMat4a = new Float32Array(16);
 const tempUint8Array4$1 = new Uint8Array(4);
@@ -33448,7 +33448,7 @@ class DTXLayer extends Layer {
                         const subPortionReadableGeometry = subPortionReadableGeometries[subPortionId];
                         const positions = subPortionReadableGeometry.positionsCompressed;
                         const positionsDecodeMatrix = subPortionReadableGeometry.positionsDecodeMatrix;
-                        const worldPos = tempVec4a$b;
+                        const worldPos = tempVec4a$a;
                         for (let i = 0, len = positions.length; i < len; i += 3) {
                             worldPos[0] = positions[i];
                             worldPos[1] = positions[i + 1];
@@ -33922,8 +33922,8 @@ const tempFloat32 = new Float32Array(1);
 const tempFloat32Vec4 = new Float32Array(4);
 const tempVec3fa = new Float32Array(3);
 const tempMat4$1 = math.mat4();
-const tempVec4a$a = math.vec4([0, 0, 0, 1]);
-const tempVec4b$9 = math.vec4();
+const tempVec4a$9 = math.vec4([0, 0, 0, 1]);
+const tempVec4b$8 = math.vec4();
 
 const tempVec3a$d = math.vec3();
 const tempVec3b$9 = math.vec3();
@@ -34552,7 +34552,7 @@ class VBOLayer extends Layer {
             getEachVertex: (portionId, callback) => {
                 const retainedGeometry = portions[portionId].retainedGeometry;
                 if (retainedGeometry) {
-                    const origVec = tempVec4b$9;
+                    const origVec = tempVec4b$8;
                     if (origin) {
                         origVec.set(origin, 0);
                     } else {
@@ -34561,7 +34561,7 @@ class VBOLayer extends Layer {
                     origVec[3] = 1;
                     const sceneModelMatrix = model.matrix;
                     const positions = retainedGeometry.quantizedPositions;
-                    const worldPos = tempVec4a$a;
+                    const worldPos = tempVec4a$9;
                     for (let i = 0, len = positions.length; i < len; i += 3) {
                         worldPos[0] = positions[i];
                         worldPos[1] = positions[i + 1];
@@ -42700,8 +42700,8 @@ class LightMap extends CubeTexture {
     }
 }
 
-const tempVec4a$9 = math.vec4();
-const tempVec4b$8 = math.vec4();
+const tempVec4a$8 = math.vec4();
+const tempVec4b$7 = math.vec4();
 
 
 /**
@@ -42860,12 +42860,12 @@ class Marker extends Component {
             this.fire("viewPos", this._viewPos);
         }
         if (this._canvasPosDirty) {
-            tempVec4a$9.set(this._viewPos);
-            tempVec4a$9[3] = 1.0;
-            math.transformPoint4(this.scene.camera.projMatrix, tempVec4a$9, tempVec4b$8);
+            tempVec4a$8.set(this._viewPos);
+            tempVec4a$8[3] = 1.0;
+            math.transformPoint4(this.scene.camera.projMatrix, tempVec4a$8, tempVec4b$7);
             const aabb = this.scene.canvas.boundary;
-            this._canvasPos[0] = Math.floor((1 + tempVec4b$8[0] / tempVec4b$8[3]) * aabb[2] / 2);
-            this._canvasPos[1] = Math.floor((1 - tempVec4b$8[1] / tempVec4b$8[3]) * aabb[3] / 2);
+            this._canvasPos[0] = Math.floor((1 + tempVec4b$7[0] / tempVec4b$7[3]) * aabb[2] / 2);
+            this._canvasPos[1] = Math.floor((1 - tempVec4b$7[1] / tempVec4b$7[3]) * aabb[3] / 2);
             this._canvasPosDirty = false;
             this.fire("canvasPos", this._canvasPos);
         }
@@ -44748,7 +44748,7 @@ class PerformanceModel extends SceneModel {
 
 const tempVec3a$b = math.vec3();
 const tempVec3b$8 = math.vec3();
-const tempVec4a$8 = math.vec4();
+const tempVec4a$7 = math.vec4();
 const front = math.vec3([0,  0, -1]);
 const back  = math.vec3([0,  0,  1]);
 const up    = math.vec3([0,  1,  0]);
@@ -44897,7 +44897,7 @@ class SectionPlane extends Component {
         this._state.quaternion.set(value || [0, 0, 0, -1]);
         math.vec3ApplyQuaternion(this._state.quaternion, back, this._state.dir);
         const quatUp = math.vec3ApplyQuaternion(this._state.quaternion, up, tempVec3a$b);
-        const dirOnlyQ = math.vec3PairToQuaternion(back, this._state.dir, tempVec4a$8);
+        const dirOnlyQ = math.vec3PairToQuaternion(back, this._state.dir, tempVec4a$7);
         const dirOnlyUp = math.vec3ApplyQuaternion(dirOnlyQ, up, tempVec3b$8);
         const angle = Math.acos(Math.min(1, math.dotVec3(quatUp, dirOnlyUp)));
         const sign = Math.sign(math.dotVec3(this._state.dir, math.cross3Vec3(quatUp, dirOnlyUp, tempVec3b$8)));
@@ -44954,13 +44954,13 @@ class SectionPlane extends Component {
     _onDirRollUpdated() {
         math.vec3PairToQuaternion(back, this._state.dir, this._state.quaternion);
 
-        tempVec4a$8[0] = 0;
-        tempVec4a$8[1] = 0;
-        tempVec4a$8[2] = -1;
-        tempVec4a$8[3] = this._state.roll;
-        math.angleAxisToQuaternion(tempVec4a$8, tempVec4a$8);
+        tempVec4a$7[0] = 0;
+        tempVec4a$7[1] = 0;
+        tempVec4a$7[2] = -1;
+        tempVec4a$7[3] = this._state.roll;
+        math.angleAxisToQuaternion(tempVec4a$7, tempVec4a$7);
 
-        math.mulQuaternions(this._state.quaternion, tempVec4a$8, this._state.quaternion);
+        math.mulQuaternions(this._state.quaternion, tempVec4a$7, this._state.quaternion);
 
         this._onDirUpdated();
     }
@@ -51646,9 +51646,9 @@ const tempVec3c$6 = math.vec3();
 const tempVec3d$1 = math.vec3();
 const tempVec3e = math.vec3();
 const tempVec3f = math.vec3();
-const tempVec4a$7 = math.vec4();
-const tempVec4b$7 = math.vec4();
-const tempVec4c$2 = math.vec4();
+const tempVec4a$6 = math.vec4();
+const tempVec4b$6 = math.vec4();
+const tempVec4c$1 = math.vec4();
 const tempMat = math.mat4();
 const tempMatb = math.mat4();
 const eyeLookVec = math.vec3();
@@ -52532,9 +52532,9 @@ class Camera extends Component {
      * @returns {[number, number]} the canvas position
      */
     projectWorldPos(worldPos) {
-        const _worldPos = tempVec4a$7;
-        const viewPos = tempVec4b$7;
-        const screenPos = tempVec4c$2;
+        const _worldPos = tempVec4a$6;
+        const viewPos = tempVec4b$6;
+        const screenPos = tempVec4c$1;
         _worldPos[0] = worldPos[0];
         _worldPos[1] = worldPos[1];
         _worldPos[2] = worldPos[2];
@@ -57162,9 +57162,9 @@ const tempVec3a$9 = math.vec3();
 const tempVec3b$6 = math.vec3();
 const tempVec3c$5 = math.vec3();
 
-const tempVec4a$6 = math.vec4();
-const tempVec4b$6 = math.vec4();
-const tempVec4c$1 = math.vec4();
+const tempVec4a$5 = math.vec4();
+const tempVec4b$5 = math.vec4();
+const tempVec4c = math.vec4();
 
 /**
  * @private
@@ -57202,8 +57202,8 @@ class PanController {
 
             camera.ortho.scale = camera.ortho.scale - dollyDelta;
 
-            const unprojectedWorldPos = this._unproject(targetCanvasPos, tempVec4a$6);
-            const offset = math.subVec3(unprojectedWorldPos, camera.eye, tempVec4c$1);
+            const unprojectedWorldPos = this._unproject(targetCanvasPos, tempVec4a$5);
+            const offset = math.subVec3(unprojectedWorldPos, camera.eye, tempVec4c);
             const moveVec = math.mulVec3Scalar(math.normalizeVec3(offset), -dollyDelta, []);
 
             camera.eye = [camera.eye[0] - moveVec[0], camera.eye[1] - moveVec[1], camera.eye[2] - moveVec[2]];
@@ -57229,13 +57229,13 @@ class PanController {
             // - get the vector in which we're dollying;
             // - add both vectors to camera eye and look.
 
-            const worldPos1 = this._unproject(targetCanvasPos, tempVec4a$6);
+            const worldPos1 = this._unproject(targetCanvasPos, tempVec4a$5);
 
             camera.ortho.scale = camera.ortho.scale - dollyDelta;
             camera.ortho._update(); // HACK
 
-            const worldPos2 = this._unproject(targetCanvasPos, tempVec4b$6);
-            const offset = math.subVec3(worldPos2, worldPos1, tempVec4c$1);
+            const worldPos2 = this._unproject(targetCanvasPos, tempVec4b$5);
+            const offset = math.subVec3(worldPos2, worldPos1, tempVec4c);
             const eyeLookMoveVec = math.mulVec3Scalar(math.normalizeVec3(math.subVec3(camera.look, camera.eye, tempVec3a$9)), -dollyDelta, tempVec3b$6);
             const moveVec = math.addVec3(offset, eyeLookMoveVec, tempVec3c$5);
 
@@ -57268,9 +57268,9 @@ const tempVec3a$8 = math.vec3();
 const tempVec3b$5 = math.vec3();
 const tempVec3c$4 = math.vec3();
 
-const tempVec4a$5 = math.vec4();
-const tempVec4b$5 = math.vec4();
-const tempVec4c = math.vec4();
+math.vec4();
+math.vec4();
+math.vec4();
 
 const TOP_LIMIT = 0.001;
 const BOTTOM_LIMIT = Math.PI - 0.001;
@@ -57344,6 +57344,7 @@ class PivotController {
             geometry: this._pivotSphereGeometry,
             material: this._pivotSphereMaterial,
             pickable: false,
+            collidable: false,
             position: this._rtcPos,
             rtcCenter: this._rtcCenter
         });
@@ -57381,11 +57382,10 @@ class PivotController {
             // data-textures: avoid to do continuous DOM layout calculations            
             let canvasBoundingRect = canvas._lastBoundingClientRect;
 
-            if (!canvasBoundingRect || canvas._canvasSizeChanged)
-            {
+            if (!canvasBoundingRect || canvas._canvasSizeChanged) {
                 const canvasElem = canvas.canvas;
 
-                canvasBoundingRect = canvas._lastBoundingClientRect = canvasElem.getBoundingClientRect ();
+                canvasBoundingRect = canvas._lastBoundingClientRect = canvasElem.getBoundingClientRect();
             }
 
             if (this._pivotElement) {
@@ -57399,7 +57399,7 @@ class PivotController {
     updatePivotSphere() {
         if (this._pivoting && this._pivotSphere) {
             worldToRTCPos(this.getPivotPos(), this._rtcCenter, this._rtcPos);
-            if(!math.compareVec3(this._rtcPos, this._pivotSphere.position)) {
+            if (!math.compareVec3(this._rtcPos, this._pivotSphere.position)) {
                 this.destroyPivotSphere();
                 this.createPivotSphere();
             }
@@ -57431,8 +57431,8 @@ class PivotController {
         this._pivotSphereMaterial = new PhongMaterial(this._scene, {
             emissive: color,
             ambient: color,
-            specular: [0,0,0],
-            diffuse: [0,0,0],
+            specular: [0, 0, 0],
+            diffuse: [0, 0, 0],
         });
     }
 
@@ -57451,6 +57451,10 @@ class PivotController {
     startPivot() {
 
         const camera = this._scene.camera;
+
+        if (!this._pivotPosSet) {
+            this.setPivotPos(camera.look);
+        }
 
         let lookat = math.lookAtMat4v(camera.eye, camera.look, camera.up);
         math.transformPoint3(lookat, this.getPivotPos(), this._cameraOffset);
@@ -57506,25 +57510,92 @@ class PivotController {
     }
 
     /**
-     * Sets the pivot position to the 3D projection of the given 2D canvas coordinates on a sphere centered
-     * at the viewpoint. The radius of the sphere is configured via {@link CameraControl#smartPivot}.
+     * Sets the pivot position using the Ground Plane Projection Fallback mechanism:
+     * 1. Attempts surface raycast to find collision point with model.
+     * 2. If no collision, defines the reference ground plane at model's bottom elevation (Z = Zmin or Y = Ymin)
+     *    with normal vector n = camera.worldUp.
+     * 3. Solves line-plane intersection: P(t) = C + t * d with plane (P - P0) . n = 0,
+     *    yielding intersection point P_inter as the new pivot point.
      *
-     *
-     * @param canvasPos
+     * @param {Number[]} canvasPos
      */
     setCanvasPivotPos(canvasPos) {
+        // Step 1: Raycast to find collision with model
+        const pickResult = this._scene.pick({
+            canvasPos: canvasPos,
+            pickSurface: true
+        });
+
+        if (pickResult && pickResult.worldPos) {
+            this.setPivotPos(pickResult.worldPos);
+            return;
+        }
+
+        // Step 2: Ground Plane Projection Fallback
         const camera = this._scene.camera;
-        const pivotShereRadius = Math.abs(math.distVec3(this._scene.center, camera.eye));
-        const transposedProjectMat = camera.project.transposedMatrix;
-        const Pt3 = transposedProjectMat.subarray(8, 12);
-        const Pt4 = transposedProjectMat.subarray(12);
-        const D = [0, 0, -1.0, 1];
-        const screenZ = math.dotVec4(D, Pt3) / math.dotVec4(D, Pt4);
-        const worldPos = tempVec4a$5;
-        camera.project.unproject(canvasPos, screenZ, tempVec4b$5, tempVec4c, worldPos);
-        const eyeWorldPosVec = math.normalizeVec3(math.subVec3(worldPos, camera.eye, tempVec3a$8));
-        const posOnSphere = math.addVec3(camera.eye, math.mulVec3Scalar(eyeWorldPosVec, pivotShereRadius, tempVec3b$5), tempVec3c$4);
-        this.setPivotPos(posOnSphere);
+        const canvas = this._scene.canvas.canvas;
+
+        // Calculate Raycast origin C and direction d from camera through canvasPos
+        const rayOrigin = math.vec3(); // Camera C
+        const rayDir = math.vec3();    // Direction d
+        math.canvasPosToWorldRay(
+            canvas,
+            camera.viewMatrix,
+            camera.projMatrix,
+            camera.projection,
+            canvasPos,
+            rayOrigin,
+            rayDir
+        );
+
+        // Define Ground Reference Plane:
+        // Normal vector n is aligned with worldUp (e.g. n = (0, 0, 1) for Z-up, (0, 1, 0) for Y-up)
+        let upAxis = 1;
+        if (camera.worldUp[2] > camera.worldUp[0] && camera.worldUp[2] > camera.worldUp[1]) {
+            upAxis = 2; // Z-up: n = (0, 0, 1)
+        } else if (camera.worldUp[0] > camera.worldUp[1] && camera.worldUp[0] > camera.worldUp[2]) {
+            upAxis = 0; // X-up: n = (1, 0, 0)
+        }
+
+        // Ground elevation Zmin from model Bounding Box
+        const aabb = this._scene.numVisibleObjects > 0
+            ? this._scene.getAABB(this._scene.visibleObjectIds)
+            : this._scene.aabb;
+        const floorElevation = aabb[upAxis]; // Zmin
+        const sceneCenter = this._scene.center;
+        const distToCenter = Math.max(1, math.distVec3(sceneCenter, rayOrigin));
+
+        // Step 3: Line-Plane Intersection
+        // Plane equation: P . n + D = 0  =>  (C + t * d) . n - floorElevation = 0
+        // Solving for t: t = (floorElevation - C . n) / (d . n)
+        const dDotN = rayDir[upAxis];
+        const cDotN = rayOrigin[upAxis];
+        let pivotPos;
+
+        if (Math.abs(dDotN) > 0.0001) {
+            const t = (floorElevation - cDotN) / dDotN;
+            if (t > 0 && t <= distToCenter * 20) {
+                // P_inter = C + t * d
+                pivotPos = math.addVec3(rayOrigin, math.mulVec3Scalar(rayDir, t, tempVec3b$5), tempVec3c$4);
+            }
+        }
+
+        // Fallback if ray does not intersect in front (looking parallel or upward):
+        // Project ray direction onto the ground reference plane
+        if (!pivotPos) {
+            const horizontalDir = math.vec3([rayDir[0], rayDir[1], rayDir[2]]);
+            horizontalDir[upAxis] = 0;
+            if (math.sqLenVec3(horizontalDir) > 0.0001) {
+                math.normalizeVec3(horizontalDir);
+                pivotPos = math.addVec3(rayOrigin, math.mulVec3Scalar(horizontalDir, distToCenter, tempVec3b$5), tempVec3c$4);
+            } else {
+                pivotPos = math.vec3([sceneCenter[0], sceneCenter[1], sceneCenter[2]]);
+            }
+        }
+
+        // Guarantee exact ground plane elevation
+        pivotPos[upAxis] = floorElevation;
+        this.setPivotPos(pivotPos);
     }
 
     /**
@@ -57558,13 +57629,13 @@ class PivotController {
 
         const isMovingUp = dy < 0;
         const isMovingDown = dy > 0;
-        
+
         // Track if we're at limits - only check if we're very close to the limit
         const atTopLimit = Math.abs(this._polar - TOP_LIMIT) < 0.005;
         const atBottomLimit = Math.abs(this._polar - BOTTOM_LIMIT) < 0.005;
-        
+
         let newPolar = this._polar + dy * .01;
-        
+
         // Case 1: At top limit and trying to go beyond
         if (atTopLimit && isMovingUp) {
             newPolar = TOP_LIMIT;
@@ -59084,16 +59155,8 @@ class MousePickHandler {
                         pivotController.startPivot();
                         this._lastClickedWorldPos = pickResult.worldPos.slice();
                     } else {
-                        const orbitReference = navigationContextController.resolveOrbitReference(states.pointerCanvasPos);
-                        if (orbitReference) {
-                            pivotController.setPivotPos(orbitReference.worldPos);
-                        } else if (configs.smartPivot) {
-                            pivotController.setCanvasPivotPos(states.pointerCanvasPos);
-                        } else if (this._lastClickedWorldPos) {
-                            pivotController.setPivotPos(this._lastClickedWorldPos);
-                        } else {
-                            pivotController.setPivotPos(scene.camera.look);
-                        }
+                        pivotController.setCanvasPivotPos(states.pointerCanvasPos);
+                        navigationContextController.establishNavigationPivot(pivotController.getPivotPos(), "orbit");
                         pivotController.startPivot();
                     }
                 }
@@ -59333,7 +59396,7 @@ class KeyboardPanRotateDollyHandler {
                 return;
             }
 
-            if (configs.keyboardEnabledOnlyIfMouseover &&  !states.mouseover) {
+            if (configs.keyboardEnabledOnlyIfMouseover && !states.mouseover) {
                 return;
             }
 
@@ -59356,7 +59419,9 @@ class KeyboardPanRotateDollyHandler {
                 if (rotateYPos || rotateYNeg || rotateXPos || rotateXNeg) {
 
                     if ((!configs.firstPerson) && configs.followPointer) {
-                        controllers.pivotController.startPivot();
+                        if (!controllers.pivotController.getPivoting()) {
+                            controllers.pivotController.startPivot();
+                        }
                     }
 
                     if (rotateYPos) {
@@ -59373,9 +59438,9 @@ class KeyboardPanRotateDollyHandler {
                         updates.rotateDeltaX -= orbitDelta;
                     }
 
-                    if ((!configs.firstPerson) && configs.followPointer) {
-                        controllers.pivotController.startPivot();
-                    }
+                    // if ((!configs.firstPerson) && configs.followPointer) {
+                    //     controllers.pivotController.startPivot();
+                    // }
                 }
             }
 
@@ -59947,7 +60012,7 @@ function getCanvasPosFromEvent$2(event, canvas, canvasPos) {
     return canvasPos;
 }
 
-const getCanvasPosFromEvent$1 = function(event, canvas, canvasPos) {
+const getCanvasPosFromEvent$1 = function (event, canvas, canvasPos) {
     if (!event) {
         event = window.event;
         canvasPos[0] = event.x;
@@ -60024,7 +60089,7 @@ class TouchPanRotateAndDollyHandler {
                         } else {
 
                             if (configs.smartPivot) {
-                                pivotController.setCanvasPivotPos(states.pointerCanvasPos);
+                                pivotController.setCanvasPivotPos(tapStartCanvasPos);
                             } else {
                                 pivotController.setPivotPos(scene.camera.look);
                             }
@@ -60125,9 +60190,9 @@ class TouchPanRotateAndDollyHandler {
                     }
 
                 } else {
-                  //  if (!absorbTinyFirstDrag) {
-                        updates.rotateDeltaY -= (xPanDelta / canvasWidth) * (configs.dragRotationRate * 1.0); // Full horizontal rotation
-                        updates.rotateDeltaX += (yPanDelta / canvasHeight) * (configs.dragRotationRate * 1.5); // Half vertical rotation
+                    //  if (!absorbTinyFirstDrag) {
+                    updates.rotateDeltaY -= (xPanDelta / canvasWidth) * (configs.dragRotationRate * 1.0); // Full horizontal rotation
+                    updates.rotateDeltaX += (yPanDelta / canvasHeight) * (configs.dragRotationRate * 1.5); // Half vertical rotation
                     // } else {
                     //     firstDragDeltaY -= (xPanDelta / canvasWidth) * (configs.dragRotationRate * 1.0); // Full horizontal rotation
                     //     firstDragDeltaX += (yPanDelta / canvasHeight) * (configs.dragRotationRate * 1.5); // Half vertical rotation

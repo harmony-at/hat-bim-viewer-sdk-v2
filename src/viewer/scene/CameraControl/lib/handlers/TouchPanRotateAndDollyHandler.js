@@ -1,6 +1,6 @@
-import {math} from "../../../math/math.js";
+import { math } from "../../../math/math.js";
 
-const getCanvasPosFromEvent = function(event, canvas, canvasPos) {
+const getCanvasPosFromEvent = function (event, canvas, canvasPos) {
     if (!event) {
         event = window.event;
         canvasPos[0] = event.x;
@@ -84,7 +84,7 @@ class TouchPanRotateAndDollyHandler {
                         } else {
 
                             if (configs.smartPivot) {
-                                pivotController.setCanvasPivotPos(states.pointerCanvasPos);
+                                pivotController.setCanvasPivotPos(tapStartCanvasPos);
                             } else {
                                 pivotController.setPivotPos(scene.camera.look);
                             }
@@ -193,9 +193,9 @@ class TouchPanRotateAndDollyHandler {
                     }
 
                 } else {
-                  //  if (!absorbTinyFirstDrag) {
-                        updates.rotateDeltaY -= (xPanDelta / canvasWidth) * (configs.dragRotationRate * 1.0); // Full horizontal rotation
-                        updates.rotateDeltaX += (yPanDelta / canvasHeight) * (configs.dragRotationRate * 1.5); // Half vertical rotation
+                    //  if (!absorbTinyFirstDrag) {
+                    updates.rotateDeltaY -= (xPanDelta / canvasWidth) * (configs.dragRotationRate * 1.0); // Full horizontal rotation
+                    updates.rotateDeltaX += (yPanDelta / canvasHeight) * (configs.dragRotationRate * 1.5); // Half vertical rotation
                     // } else {
                     //     firstDragDeltaY -= (xPanDelta / canvasWidth) * (configs.dragRotationRate * 1.0); // Full horizontal rotation
                     //     firstDragDeltaX += (yPanDelta / canvasHeight) * (configs.dragRotationRate * 1.5); // Half vertical rotation
@@ -282,4 +282,4 @@ class TouchPanRotateAndDollyHandler {
     }
 }
 
-export {TouchPanRotateAndDollyHandler};
+export { TouchPanRotateAndDollyHandler };

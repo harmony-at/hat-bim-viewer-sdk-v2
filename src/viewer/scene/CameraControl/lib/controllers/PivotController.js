@@ -85,6 +85,7 @@ class PivotController {
             geometry: this._pivotSphereGeometry,
             material: this._pivotSphereMaterial,
             pickable: false,
+            collidable: false,
             position: this._rtcPos,
             rtcCenter: this._rtcCenter
         });
@@ -122,11 +123,10 @@ class PivotController {
             // data-textures: avoid to do continuous DOM layout calculations            
             let canvasBoundingRect = canvas._lastBoundingClientRect;
 
-            if (!canvasBoundingRect || canvas._canvasSizeChanged)
-            {
+            if (!canvasBoundingRect || canvas._canvasSizeChanged) {
                 const canvasElem = canvas.canvas;
 
-                canvasBoundingRect = canvas._lastBoundingClientRect = canvasElem.getBoundingClientRect ();
+                canvasBoundingRect = canvas._lastBoundingClientRect = canvasElem.getBoundingClientRect();
             }
 
             if (this._pivotElement) {
@@ -140,7 +140,7 @@ class PivotController {
     updatePivotSphere() {
         if (this._pivoting && this._pivotSphere) {
             worldToRTCPos(this.getPivotPos(), this._rtcCenter, this._rtcPos);
-            if(!math.compareVec3(this._rtcPos, this._pivotSphere.position)) {
+            if (!math.compareVec3(this._rtcPos, this._pivotSphere.position)) {
                 this.destroyPivotSphere();
                 this.createPivotSphere();
             }
@@ -172,8 +172,8 @@ class PivotController {
         this._pivotSphereMaterial = new PhongMaterial(this._scene, {
             emissive: color,
             ambient: color,
-            specular: [0,0,0],
-            diffuse: [0,0,0],
+            specular: [0, 0, 0],
+            diffuse: [0, 0, 0],
         });
     }
 
@@ -192,6 +192,10 @@ class PivotController {
     startPivot() {
 
         const camera = this._scene.camera;
+
+        if (!this._pivotPosSet) {
+            this.setPivotPos(camera.look);
+        }
 
         let lookat = math.lookAtMat4v(camera.eye, camera.look, camera.up);
         math.transformPoint3(lookat, this.getPivotPos(), this._cameraOffset);
@@ -247,25 +251,92 @@ class PivotController {
     }
 
     /**
-     * Sets the pivot position to the 3D projection of the given 2D canvas coordinates on a sphere centered
-     * at the viewpoint. The radius of the sphere is configured via {@link CameraControl#smartPivot}.
+     * Sets the pivot position using the Ground Plane Projection Fallback mechanism:
+     * 1. Attempts surface raycast to find collision point with model.
+     * 2. If no collision, defines the reference ground plane at model's bottom elevation (Z = Zmin or Y = Ymin)
+     *    with normal vector n = camera.worldUp.
+     * 3. Solves line-plane intersection: P(t) = C + t * d with plane (P - P0) . n = 0,
+     *    yielding intersection point P_inter as the new pivot point.
      *
-     *
-     * @param canvasPos
+     * @param {Number[]} canvasPos
      */
     setCanvasPivotPos(canvasPos) {
+        // Step 1: Raycast to find collision with model
+        const pickResult = this._scene.pick({
+            canvasPos: canvasPos,
+            pickSurface: true
+        });
+
+        if (pickResult && pickResult.worldPos) {
+            this.setPivotPos(pickResult.worldPos);
+            return;
+        }
+
+        // Step 2: Ground Plane Projection Fallback
         const camera = this._scene.camera;
-        const pivotShereRadius = Math.abs(math.distVec3(this._scene.center, camera.eye));
-        const transposedProjectMat = camera.project.transposedMatrix;
-        const Pt3 = transposedProjectMat.subarray(8, 12);
-        const Pt4 = transposedProjectMat.subarray(12);
-        const D = [0, 0, -1.0, 1];
-        const screenZ = math.dotVec4(D, Pt3) / math.dotVec4(D, Pt4);
-        const worldPos = tempVec4a;
-        camera.project.unproject(canvasPos, screenZ, tempVec4b, tempVec4c, worldPos);
-        const eyeWorldPosVec = math.normalizeVec3(math.subVec3(worldPos, camera.eye, tempVec3a));
-        const posOnSphere = math.addVec3(camera.eye, math.mulVec3Scalar(eyeWorldPosVec, pivotShereRadius, tempVec3b), tempVec3c);
-        this.setPivotPos(posOnSphere);
+        const canvas = this._scene.canvas.canvas;
+
+        // Calculate Raycast origin C and direction d from camera through canvasPos
+        const rayOrigin = math.vec3(); // Camera C
+        const rayDir = math.vec3();    // Direction d
+        math.canvasPosToWorldRay(
+            canvas,
+            camera.viewMatrix,
+            camera.projMatrix,
+            camera.projection,
+            canvasPos,
+            rayOrigin,
+            rayDir
+        );
+
+        // Define Ground Reference Plane:
+        // Normal vector n is aligned with worldUp (e.g. n = (0, 0, 1) for Z-up, (0, 1, 0) for Y-up)
+        let upAxis = 1;
+        if (camera.worldUp[2] > camera.worldUp[0] && camera.worldUp[2] > camera.worldUp[1]) {
+            upAxis = 2; // Z-up: n = (0, 0, 1)
+        } else if (camera.worldUp[0] > camera.worldUp[1] && camera.worldUp[0] > camera.worldUp[2]) {
+            upAxis = 0; // X-up: n = (1, 0, 0)
+        }
+
+        // Ground elevation Zmin from model Bounding Box
+        const aabb = this._scene.numVisibleObjects > 0
+            ? this._scene.getAABB(this._scene.visibleObjectIds)
+            : this._scene.aabb;
+        const floorElevation = aabb[upAxis]; // Zmin
+        const sceneCenter = this._scene.center;
+        const distToCenter = Math.max(1, math.distVec3(sceneCenter, rayOrigin));
+
+        // Step 3: Line-Plane Intersection
+        // Plane equation: P . n + D = 0  =>  (C + t * d) . n - floorElevation = 0
+        // Solving for t: t = (floorElevation - C . n) / (d . n)
+        const dDotN = rayDir[upAxis];
+        const cDotN = rayOrigin[upAxis];
+        let pivotPos;
+
+        if (Math.abs(dDotN) > 0.0001) {
+            const t = (floorElevation - cDotN) / dDotN;
+            if (t > 0 && t <= distToCenter * 20) {
+                // P_inter = C + t * d
+                pivotPos = math.addVec3(rayOrigin, math.mulVec3Scalar(rayDir, t, tempVec3b), tempVec3c);
+            }
+        }
+
+        // Fallback if ray does not intersect in front (looking parallel or upward):
+        // Project ray direction onto the ground reference plane
+        if (!pivotPos) {
+            const horizontalDir = math.vec3([rayDir[0], rayDir[1], rayDir[2]]);
+            horizontalDir[upAxis] = 0;
+            if (math.sqLenVec3(horizontalDir) > 0.0001) {
+                math.normalizeVec3(horizontalDir);
+                pivotPos = math.addVec3(rayOrigin, math.mulVec3Scalar(horizontalDir, distToCenter, tempVec3b), tempVec3c);
+            } else {
+                pivotPos = math.vec3([sceneCenter[0], sceneCenter[1], sceneCenter[2]]);
+            }
+        }
+
+        // Guarantee exact ground plane elevation
+        pivotPos[upAxis] = floorElevation;
+        this.setPivotPos(pivotPos);
     }
 
     /**
@@ -299,13 +370,13 @@ class PivotController {
 
         const isMovingUp = dy < 0;
         const isMovingDown = dy > 0;
-        
+
         // Track if we're at limits - only check if we're very close to the limit
         const atTopLimit = Math.abs(this._polar - TOP_LIMIT) < 0.005;
         const atBottomLimit = Math.abs(this._polar - BOTTOM_LIMIT) < 0.005;
-        
+
         let newPolar = this._polar + dy * .01;
-        
+
         // Case 1: At top limit and trying to go beyond
         if (atTopLimit && isMovingUp) {
             newPolar = TOP_LIMIT;
@@ -402,4 +473,4 @@ class PivotController {
 }
 
 
-export {PivotController};
+export { PivotController };

@@ -53,7 +53,7 @@ class KeyboardPanRotateDollyHandler {
                 return;
             }
 
-            if (configs.keyboardEnabledOnlyIfMouseover &&  !states.mouseover) {
+            if (configs.keyboardEnabledOnlyIfMouseover && !states.mouseover) {
                 return;
             }
 
@@ -76,7 +76,9 @@ class KeyboardPanRotateDollyHandler {
                 if (rotateYPos || rotateYNeg || rotateXPos || rotateXNeg) {
 
                     if ((!configs.firstPerson) && configs.followPointer) {
-                        controllers.pivotController.startPivot();
+                        if (!controllers.pivotController.getPivoting()) {
+                            controllers.pivotController.startPivot();
+                        }
                     }
 
                     if (rotateYPos) {
@@ -93,9 +95,9 @@ class KeyboardPanRotateDollyHandler {
                         updates.rotateDeltaX -= orbitDelta;
                     }
 
-                    if ((!configs.firstPerson) && configs.followPointer) {
-                        controllers.pivotController.startPivot();
-                    }
+                    // if ((!configs.firstPerson) && configs.followPointer) {
+                    //     controllers.pivotController.startPivot();
+                    // }
                 }
             }
 
@@ -183,4 +185,4 @@ class KeyboardPanRotateDollyHandler {
     }
 }
 
-export {KeyboardPanRotateDollyHandler};
+export { KeyboardPanRotateDollyHandler };

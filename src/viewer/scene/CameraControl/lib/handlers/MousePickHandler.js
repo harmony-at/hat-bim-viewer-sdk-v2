@@ -170,16 +170,8 @@ class MousePickHandler {
                         pivotController.startPivot();
                         this._lastClickedWorldPos = pickResult.worldPos.slice();
                     } else {
-                        const orbitReference = navigationContextController.resolveOrbitReference(states.pointerCanvasPos);
-                        if (orbitReference) {
-                            pivotController.setPivotPos(orbitReference.worldPos);
-                        } else if (configs.smartPivot) {
-                            pivotController.setCanvasPivotPos(states.pointerCanvasPos);
-                        } else if (this._lastClickedWorldPos) {
-                            pivotController.setPivotPos(this._lastClickedWorldPos);
-                        } else {
-                            pivotController.setPivotPos(scene.camera.look);
-                        }
+                        pivotController.setCanvasPivotPos(states.pointerCanvasPos);
+                        navigationContextController.establishNavigationPivot(pivotController.getPivotPos(), "orbit");
                         pivotController.startPivot();
                     }
                 }
