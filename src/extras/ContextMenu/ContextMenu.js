@@ -299,7 +299,7 @@ class ContextMenu {
         this._nextId = 0;
         this._parentNode = cfg.parentNode || document.body;
         this._offsetParent = (this._parentNode instanceof ShadowRoot) ? this._parentNode.host : this._parentNode;
-        
+
         /**
          * Subscriptions to events fired at this ContextMenu.
          * @private
@@ -616,11 +616,12 @@ class ContextMenu {
         const groups = menu.groups;
         const html = [];
 
-        const menuElement= document.createElement("div");
+        const menuElement = document.createElement("div");
         menuElement.classList.add("xeokit-context-menu", menu.id);
         menuElement.style.zIndex = 300000;
         menuElement.style.position = "absolute";
 
+        html.push('<div class="header-xeokit-context-menu"> <p>Menu</p> <p id="closeMenu' + menu.id + '" class="close-xeokit-context-menu">X</p> </div>');
         html.push('<ul>');
 
         if (groups) {
@@ -676,6 +677,11 @@ class ContextMenu {
         this._parentNode.appendChild(menuElement);
 
         menu.menuElement = menuElement;
+
+        const closeMenuElement = document.getElementById(`closeMenu${menu.id}`);
+        closeMenuElement.addEventListener('click', () => {
+            menuElement.style.display = 'none';
+        });
 
         menuElement.style["border-radius"] = 4 + "px";
         menuElement.style.display = 'none';
@@ -744,16 +750,16 @@ class ContextMenu {
                             const subMenuWidth = 200; // TODO
                             const showOnRight = (itemRect.right + subMenuWidth) < offsetRect.right;
                             const showOnLeft = (itemRect.left - subMenuWidth) > offsetRect.left;
-                        
-                            if(showOnRight)
+
+                            if (showOnRight)
                                 self._showMenu(subMenu.id, itemRect.right + window.scrollX - 5, itemRect.top + window.scrollY - 1);
                             else if (showOnLeft)
                                 self._showMenu(subMenu.id, itemRect.left - subMenuWidth + window.scrollX, itemRect.top + window.scrollY - 1);
                             else {
                                 const spaceOnLeft = itemRect.left - offsetRect.left, spaceOnRight = offsetRect.right - itemRect.right;
-                                if(spaceOnRight > spaceOnLeft) 
+                                if (spaceOnRight > spaceOnLeft)
                                     self._showMenu(subMenu.id, itemRect.right - 5 - (subMenuWidth - spaceOnRight), itemRect.top + window.scrollY - 1);
-                                else 
+                                else
                                     self._showMenu(subMenu.id, itemRect.left - spaceOnLeft, itemRect.top + window.scrollY - 1);
                             }
 
@@ -958,7 +964,7 @@ class ContextMenu {
         const bottomContainerBorder = ((this._offsetParent === window.document.body) && (offsetRect.bottom === 0)) ? window.innerHeight : (offsetRect.bottom + window.scrollY);
         const rightContainerBorder = offsetRect.right + window.scrollX;
         if ((pageY + menuHeight) > bottomContainerBorder) {
-            pageY = bottomContainerBorder- menuHeight;
+            pageY = bottomContainerBorder - menuHeight;
         }
         if ((pageX + menuWidth) > rightContainerBorder) {
             pageX = rightContainerBorder - menuWidth;

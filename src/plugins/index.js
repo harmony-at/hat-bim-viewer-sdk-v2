@@ -24,3 +24,4 @@ export * from "./CityJSONLoaderPlugin/index.js";
 export * from "./DotBIMLoaderPlugin/index.js";
 export * from "./ZonesPlugin/index.js";
 export * from "./lib/ui/index.js";
+export * from "./IssuesPlugin/index.js"

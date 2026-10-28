@@ -461,9 +461,9 @@ export class TreeViewPlugin extends Plugin {
                 } else {
                     parent.numVisibleEntities--;
                 }
-                const indeterminate = this._showIndeterminate 
-                  && parent.numVisibleEntities > 0 
-                  && parent.numVisibleEntities < parent.numEntities;
+                const indeterminate = this._showIndeterminate
+                    && parent.numVisibleEntities > 0
+                    && parent.numVisibleEntities < parent.numEntities;
                 parent.checked = parent.numVisibleEntities > 0;
                 this._renderService.setCheckbox(parent.nodeId, parent.checked, indeterminate);
 
@@ -520,7 +520,7 @@ export class TreeViewPlugin extends Plugin {
             const checkedNode = this._nodeNodes[nodeId];
             const objects = this._viewer.scene.objects;
             let numUpdated = 0;
-            
+
             this._withNodeTree(checkedNode, (node) => {
                 const objectId = node.objectId;
                 const entity = objects[objectId];
@@ -532,7 +532,7 @@ export class TreeViewPlugin extends Plugin {
                 node.checked = visible;
 
                 this._renderService.setCheckbox(node.nodeId, visible);
-                
+
                 if (entity) {
                     entity.visible = visible;
                 }
@@ -540,21 +540,22 @@ export class TreeViewPlugin extends Plugin {
 
             let parent = checkedNode.parent;
             while (parent) {
-                
+
                 if (visible) {
                     parent.numVisibleEntities += numUpdated;
                 } else {
                     parent.numVisibleEntities -= numUpdated;
                 }
-                const indeterminate = this._showIndeterminate 
-                  && parent.numVisibleEntities > 0 
-                  && parent.numVisibleEntities < parent.numEntities;
+                const indeterminate = this._showIndeterminate
+                    && parent.numVisibleEntities > 0
+                    && parent.numVisibleEntities < parent.numEntities;
                 parent.checked = parent.numVisibleEntities > 0;
                 this._renderService.setCheckbox(parent.nodeId, parent.checked, indeterminate);
-                
+
                 parent = parent.parent;
             }
             this._muteSceneEvents = false;
+            this.updateSwitchState();
         };
 
         this._hierarchy = cfg.hierarchy || "containment";
@@ -653,7 +654,7 @@ export class TreeViewPlugin extends Plugin {
         if (options && options.rootName) {
             this._rootNames[modelId] = options.rootName;
         }
-        
+
         model.on("destroyed", () => {
             this.removeModel(model.id);
         });
@@ -718,7 +719,7 @@ export class TreeViewPlugin extends Plugin {
             switchElement.scrollIntoView();
             return true;
         }
-        
+
         const path = [];
         path.unshift(node);
         let parent = node.parent;
@@ -752,7 +753,7 @@ export class TreeViewPlugin extends Plugin {
         }
 
         this._renderService.setHighlighted(this._showListItemElementId, false)
-        
+
         this._showListItemElementId = null;
     }
 
@@ -812,6 +813,36 @@ export class TreeViewPlugin extends Plugin {
         }
         for (let i = 0, len = children.length; i < len; i++) {
             this.withNodeTree(children[i], callback);
+        }
+    }
+
+    updateSwitchState() {
+        let allChecked = true;
+
+        // Kiểm tra tất cả các nút trong cây
+        for (const nodeId in this._nodeNodes) {
+            const node = this._nodeNodes[nodeId];
+            if (!node.checked) {
+                allChecked = false;
+                break;
+            }
+        }
+
+        // Cập nhật trạng thái của switch
+        const switchInputObj = document.querySelector('.xeokit-check-loadAllObjects');
+        const switchInputCls = document.querySelector('.xeokit-check-loadAllClasses');
+        const switchInputStr = document.querySelector('.xeokit-check-loadAllStoreys');
+        if (switchInputObj) {
+
+            switchInputObj.checked = allChecked;
+        }
+        if (switchInputCls) {
+
+            switchInputCls.checked = allChecked;
+        }
+        if (switchInputStr) {
+
+            switchInputStr.checked = allChecked;
         }
     }
 
@@ -1013,8 +1044,8 @@ export class TreeViewPlugin extends Plugin {
                 parent: projectNode,
                 numEntities: 0,
                 numVisibleEntities: 0,
-                checked: false,
-                xrayed: false,
+                checked: true,
+                xrayed: true,
                 children: []
             };
             if (projectNode) {
@@ -1037,8 +1068,8 @@ export class TreeViewPlugin extends Plugin {
                 parent: buildingNode,
                 numEntities: 0,
                 numVisibleEntities: 0,
-                checked: false,
-                xrayed: false,
+                checked: true,
+                xrayed: true,
                 children: []
             };
             buildingNode.children.push(storeyNode);
@@ -1233,7 +1264,7 @@ export class TreeViewPlugin extends Plugin {
             return;
         }
         const firstChild = children[0];
-        if ((this._hierarchy === "storeys" || this._hierarchy === "containment") &&  firstChild.type === "IfcBuildingStorey") {
+        if ((this._hierarchy === "storeys" || this._hierarchy === "containment") && firstChild.type === "IfcBuildingStorey") {
             if (this._elevationSortFunction) children.sort(this._elevationSortFunction);
             else children.sort(this._getSpatialSortFunc());
         } else {
@@ -1327,6 +1358,7 @@ export class TreeViewPlugin extends Plugin {
                 }
             }
         }
+        this.updateSwitchState();
     }
 
     _withNodeTree(node, callback) {
@@ -1358,8 +1390,8 @@ export class TreeViewPlugin extends Plugin {
     }
 
     _createNodeElement(node) {
-        const contextmenuHandler = (event) =>{
-                this.fire("contextmenu", {
+        const contextmenuHandler = (event) => {
+            this.fire("contextmenu", {
                 event: event,
                 viewer: this._viewer,
                 treeViewPlugin: this,
@@ -1381,7 +1413,7 @@ export class TreeViewPlugin extends Plugin {
     }
 
     _expandSwitchElement(switchElement) {
-        const expanded = this._renderService.isExpanded(switchElement); 
+        const expanded = this._renderService.isExpanded(switchElement);
         if (expanded) {
             return;
         }

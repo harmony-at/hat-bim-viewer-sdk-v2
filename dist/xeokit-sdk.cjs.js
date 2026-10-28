@@ -1,11 +1,11 @@
 /**
  * xeokit-sdk v2.6.112
- *  Commit: f86a4866a2b087cbd7a662b3c3a602f83ab17902
- *  Built: 2026-08-27T08:51:36.348Z
+ *  Commit: bd51b039b6d2f2d14e3c6c377bb56aa7bfc0300d
+ *  Built: 2026-10-28T06:51:48.326Z
  */
 
 if (typeof window !== 'undefined') {
-    window.__XEOKIT__ = { version: '2.6.112', commit: 'f86a4866a2b087cbd7a662b3c3a602f83ab17902', built: '2026-08-27T08:51:36.348Z' };
+    window.__XEOKIT__ = { version: '2.6.112', commit: 'bd51b039b6d2f2d14e3c6c377bb56aa7bfc0300d', built: '2026-10-28T06:51:48.326Z' };
 }
 
 'use strict';
@@ -355,7 +355,7 @@ class ContextMenu {
         this._nextId = 0;
         this._parentNode = cfg.parentNode || document.body;
         this._offsetParent = (this._parentNode instanceof ShadowRoot) ? this._parentNode.host : this._parentNode;
-        
+
         /**
          * Subscriptions to events fired at this ContextMenu.
          * @private
@@ -672,11 +672,12 @@ class ContextMenu {
         const groups = menu.groups;
         const html = [];
 
-        const menuElement= document.createElement("div");
+        const menuElement = document.createElement("div");
         menuElement.classList.add("xeokit-context-menu", menu.id);
         menuElement.style.zIndex = 300000;
         menuElement.style.position = "absolute";
 
+        html.push('<div class="header-xeokit-context-menu"> <p>Menu</p> <p id="closeMenu' + menu.id + '" class="close-xeokit-context-menu">X</p> </div>');
         html.push('<ul>');
 
         if (groups) {
@@ -732,6 +733,11 @@ class ContextMenu {
         this._parentNode.appendChild(menuElement);
 
         menu.menuElement = menuElement;
+
+        const closeMenuElement = document.getElementById(`closeMenu${menu.id}`);
+        closeMenuElement.addEventListener('click', () => {
+            menuElement.style.display = 'none';
+        });
 
         menuElement.style["border-radius"] = 4 + "px";
         menuElement.style.display = 'none';
@@ -800,16 +806,16 @@ class ContextMenu {
                             const subMenuWidth = 200; // TODO
                             const showOnRight = (itemRect.right + subMenuWidth) < offsetRect.right;
                             const showOnLeft = (itemRect.left - subMenuWidth) > offsetRect.left;
-                        
-                            if(showOnRight)
+
+                            if (showOnRight)
                                 self._showMenu(subMenu.id, itemRect.right + window.scrollX - 5, itemRect.top + window.scrollY - 1);
                             else if (showOnLeft)
                                 self._showMenu(subMenu.id, itemRect.left - subMenuWidth + window.scrollX, itemRect.top + window.scrollY - 1);
                             else {
                                 const spaceOnLeft = itemRect.left - offsetRect.left, spaceOnRight = offsetRect.right - itemRect.right;
-                                if(spaceOnRight > spaceOnLeft) 
+                                if (spaceOnRight > spaceOnLeft)
                                     self._showMenu(subMenu.id, itemRect.right - 5 - (subMenuWidth - spaceOnRight), itemRect.top + window.scrollY - 1);
-                                else 
+                                else
                                     self._showMenu(subMenu.id, itemRect.left - spaceOnLeft, itemRect.top + window.scrollY - 1);
                             }
 
@@ -1014,7 +1020,7 @@ class ContextMenu {
         const bottomContainerBorder = ((this._offsetParent === window.document.body) && (offsetRect.bottom === 0)) ? window.innerHeight : (offsetRect.bottom + window.scrollY);
         const rightContainerBorder = offsetRect.right + window.scrollX;
         if ((pageY + menuHeight) > bottomContainerBorder) {
-            pageY = bottomContainerBorder- menuHeight;
+            pageY = bottomContainerBorder - menuHeight;
         }
         if ((pageX + menuWidth) > rightContainerBorder) {
             pageX = rightContainerBorder - menuWidth;
@@ -55251,7 +55257,7 @@ class Scene extends Component {
         // Default lights
 
         new AmbientLight(this, {
-            color: [1.0, 1.0, 1.0],
+            color: [0.3, 0.3, 0.3],
             intensity: 0.7
         });
 
@@ -56624,7 +56630,7 @@ class Scene extends Component {
      */
     pick(params, pickResult) {
 
-        if (! this.canvas) {
+        if (!this.canvas) {
             this.error("Picking not allowed on a destroyed Scene");
             return null;
         }
@@ -56682,7 +56688,7 @@ class Scene extends Component {
      * @deprecated
      */
     snapPick(params) {
-        if (! this.canvas) {
+        if (!this.canvas) {
             this.error("Picking not allowed on a destroyed Scene");
             return null;
         }
@@ -56787,29 +56793,29 @@ class Scene extends Component {
         let zmax = math.MIN_DOUBLE;
         let valid;
         this.withObjects(ids, entity => {
-                if (entity.collidable) {
-                    const aabb = entity.aabb;
-                    if (aabb[0] < xmin) {
-                        xmin = aabb[0];
-                    }
-                    if (aabb[1] < ymin) {
-                        ymin = aabb[1];
-                    }
-                    if (aabb[2] < zmin) {
-                        zmin = aabb[2];
-                    }
-                    if (aabb[3] > xmax) {
-                        xmax = aabb[3];
-                    }
-                    if (aabb[4] > ymax) {
-                        ymax = aabb[4];
-                    }
-                    if (aabb[5] > zmax) {
-                        zmax = aabb[5];
-                    }
-                    valid = true;
+            if (entity.collidable) {
+                const aabb = entity.aabb;
+                if (aabb[0] < xmin) {
+                    xmin = aabb[0];
                 }
+                if (aabb[1] < ymin) {
+                    ymin = aabb[1];
+                }
+                if (aabb[2] < zmin) {
+                    zmin = aabb[2];
+                }
+                if (aabb[3] > xmax) {
+                    xmax = aabb[3];
+                }
+                if (aabb[4] > ymax) {
+                    ymax = aabb[4];
+                }
+                if (aabb[5] > zmax) {
+                    zmax = aabb[5];
+                }
+                valid = true;
             }
+        }
         );
         if (valid) {
             const aabb2 = math.AABB3();
@@ -57102,7 +57108,7 @@ class Scene extends Component {
         /**
          * And, store the list of subscribers.
          */
-        this._tickifiedFunctions[cbString] = {tickSubId, wrapperFunc};
+        this._tickifiedFunctions[cbString] = { tickSubId, wrapperFunc };
 
         return wrapperFunc;
     }
@@ -101632,6 +101638,7 @@ class Dot {
 
         this._dot = document.createElement('div');
         this._dot.className += this._dot.className ? ' viewer-ruler-dot' : 'viewer-ruler-dot';
+        this._dot.id += cfg.id || '';
 
         this._dotClickable = document.createElement('div');
         this._dotClickable.className += this._dotClickable.className ? ' viewer-ruler-dot-clickable' : 'viewer-ruler-dot-clickable';
@@ -101645,15 +101652,15 @@ class Dot {
         dotStyle.border = "solid 2px white";
         dotStyle.background = "lightgreen";
         dotStyle.position = "absolute";
-        dotStyle["z-index"] = cfg.zIndex === undefined ? "40000005" : cfg.zIndex ;
-        dotStyle.width = 8 + "px";
-        dotStyle.height = 8 + "px";
+        dotStyle["z-index"] = cfg.zIndex === undefined ? "40000005" : cfg.zIndex;
+        dotStyle.width = cfg.isIssue ? 18 + 'px' : 8 + 'px';
+        dotStyle.height = cfg.isIssue ? 18 + 'px' : 8 + 'px';
         dotStyle.visibility = this._visible ? "visible" : "hidden";
         dotStyle.top = 0 + "px";
         dotStyle.left = 0 + "px";
         dotStyle["box-shadow"] = "0 2px 5px 0 #182A3D;";
         dotStyle["opacity"] = 1.0;
-        dotStyle["pointer-events"] = "none";
+        dotStyle['pointer-events'] = cfg.isIssue ? 'auto' : 'none';
         if (cfg.onContextMenu) ;
         parentElement.appendChild(dot);
 
@@ -101670,12 +101677,43 @@ class Dot {
         dotClickableStyle.left = 0 + "px";
         dotClickableStyle["opacity"] = 0.0;
         dotClickableStyle["pointer-events"] = "none";
+        //themmoi2612
+        if (cfg.isPoint) {
+            this.origin = cfg.origin || new Float64Array(3);
+
+            this._tooltip = document.createElement('div');
+            this._tooltip.className = 'tooltip';
+            this._tooltip.style.position = 'absolute';
+            this._tooltip.style.backgroundColor = 'white';
+            this._tooltip.style.border = '1px solid #ccc';
+            this._tooltip.style.borderRadius = '5px';
+            this._tooltip.style.padding = '5px';
+            this._tooltip.style.visibility = 'hidden';
+            this._tooltip.style.fontSize = '13px';
+            parentElement.appendChild(this._tooltip);
+
+            dot.addEventListener('mouseenter', this.showTooltip.bind(this));
+            dot.addEventListener('mouseleave', this.hideTooltip.bind(this));
+        }
         if (cfg.onContextMenu) ;
         parentElement.appendChild(dotClickable);
 
         dotClickable.addEventListener('click', (event) => {
             parentElement.dispatchEvent(new MouseEvent('mouseover', event));
         });
+
+        if (cfg.isIssue) {
+            dot.addEventListener('click', (event) => {
+                console.log('click');
+                cfg.getId();
+                parentElement.dispatchEvent(new MouseEvent('mouseover', event));
+            });
+            dot.addEventListener('mousemove', (event) => {
+                console.log('mousemove');
+                cfg.onMouseMove(event);
+                parentElement.dispatchEvent(new MouseEvent('mouseover', event));
+            });
+        }
 
         if (cfg.onMouseOver) {
             dotClickable.addEventListener('mouseover', (event) => {
@@ -101737,12 +101775,24 @@ class Dot {
                 cfg.onContextMenu(event, this);
             };
             addContextMenuListener(dotClickable, contextMenuCallback);
-            
+
         }
 
         this.setPos(cfg.x || 0, cfg.y || 0);
         this.setFillColor(cfg.fillColor);
         this.setBorderColor(cfg.borderColor);
+    }
+
+    //themmoi2012
+    showTooltip(event) {
+        this._tooltip.innerHTML = `x: ${this.origin[0].toFixed(2)}m | y:${-1 * this.origin[2].toFixed(2)}m | z: ${this.origin[1].toFixed(2)}m`;
+        this._tooltip.style.left = event.clientX + 'px';
+        this._tooltip.style.top = event.clientY + 'px';
+        this._tooltip.style.visibility = 'visible';
+    }
+
+    hideTooltip() {
+        this._tooltip.style.visibility = 'hidden';
     }
 
     setPos(x, y) {
@@ -101804,7 +101854,7 @@ class Dot {
             this._dot.classList.remove(this._highlightClass);
         }
     }
-    
+
     destroy() {
         this.setVisible(false);
         if (this._dot.parentElement) {
@@ -105679,19 +105729,19 @@ class AngleMeasurementsPlugin extends Plugin {
     }
 }
 
-const WAITING_FOR_ORIGIN_TOUCH_START$1 = 0;
-const WAITING_FOR_ORIGIN_QUICK_TOUCH_END$1 = 1;
-const WAITING_FOR_ORIGIN_LONG_TOUCH_END$1 = 2;
+const WAITING_FOR_ORIGIN_TOUCH_START$2 = 0;
+const WAITING_FOR_ORIGIN_QUICK_TOUCH_END$2 = 1;
+const WAITING_FOR_ORIGIN_LONG_TOUCH_END$2 = 2;
 
 const WAITING_FOR_CORNER_TOUCH_START = 3;
 const WAITING_FOR_CORNER_QUICK_TOUCH_END = 4;
 const WAITING_FOR_CORNER_LONG_TOUCH_END = 5;
 
-const WAITING_FOR_TARGET_TOUCH_START$1 = 6;
-const WAITING_FOR_TARGET_QUICK_TOUCH_END$1 = 7;
-const WAITING_FOR_TARGET_LONG_TOUCH_END$1 = 8;
+const WAITING_FOR_TARGET_TOUCH_START$2 = 6;
+const WAITING_FOR_TARGET_QUICK_TOUCH_END$2 = 7;
+const WAITING_FOR_TARGET_LONG_TOUCH_END$2 = 8;
 
-const TOUCH_CANCELING$1 = 7;
+const TOUCH_CANCELING$2 = 7;
 
 const tmpVec2$1 = math.vec2();
 
@@ -105735,7 +105785,7 @@ class AngleMeasurementsTouchControl extends AngleMeasurementsControl {
 
         this._longTouchTimeoutMs = 300;
         this._snapping = cfg.snapping !== false;
-        this._touchState = WAITING_FOR_ORIGIN_TOUCH_START$1;
+        this._touchState = WAITING_FOR_ORIGIN_TOUCH_START$2;
 
         this._attachPlugin(angleMeasurementsPlugin, cfg);
     }
@@ -105804,7 +105854,7 @@ class AngleMeasurementsTouchControl extends AngleMeasurementsControl {
 
         let longTouchTimeout = null;
 
-        this._touchState = WAITING_FOR_ORIGIN_TOUCH_START$1;
+        this._touchState = WAITING_FOR_ORIGIN_TOUCH_START$2;
 
         const touchStartCanvasPos = math.vec2();
         const touchMoveCanvasPos = math.vec2();
@@ -105830,7 +105880,7 @@ class AngleMeasurementsTouchControl extends AngleMeasurementsControl {
                 this._currentAngleMeasurement = null;
             }
             enableCameraNavigation();
-            this._touchState = WAITING_FOR_ORIGIN_TOUCH_START$1;
+            this._touchState = WAITING_FOR_ORIGIN_TOUCH_START$2;
         };
 
         const copyCanvasPos = (event, dst) => {
@@ -105864,7 +105914,7 @@ class AngleMeasurementsTouchControl extends AngleMeasurementsControl {
 
             switch (this._touchState) {
 
-                case WAITING_FOR_ORIGIN_TOUCH_START$1:
+                case WAITING_FOR_ORIGIN_TOUCH_START$2:
                     if (currentNumTouches !== 1 && longTouchTimeout !== null) { // Two or more fingers down
                         cancel();
                         return;
@@ -105944,11 +105994,11 @@ class AngleMeasurementsTouchControl extends AngleMeasurementsControl {
                         //     this.pointerLens.cursorPos = pickResult.canvasPos;
                         //     this.pointerLens.snapped = false;
                         // }
-                        this._touchState = WAITING_FOR_ORIGIN_LONG_TOUCH_END$1;
+                        this._touchState = WAITING_FOR_ORIGIN_LONG_TOUCH_END$2;
                       //  console.log("touchstart: this._touchState= WAITING_FOR_ORIGIN_TOUCH_START -> WAITING_FOR_ORIGIN_LONG_TOUCH_END")
                         disableCameraNavigation();
                     }, this._longTouchTimeoutMs);
-                    this._touchState = WAITING_FOR_ORIGIN_QUICK_TOUCH_END$1;
+                    this._touchState = WAITING_FOR_ORIGIN_QUICK_TOUCH_END$2;
                     //console.log("touchstart: this._touchState= WAITING_FOR_ORIGIN_TOUCH_START -> WAITING_FOR_ORIGIN_QUICK_TOUCH_END")
 
                     touchId = touch.identifier;
@@ -106048,7 +106098,7 @@ class AngleMeasurementsTouchControl extends AngleMeasurementsControl {
 
                     break;
 
-                case WAITING_FOR_TARGET_TOUCH_START$1:
+                case WAITING_FOR_TARGET_TOUCH_START$2:
 
                     if (currentNumTouches !== 1 && longTouchTimeout !== null) { // Two or more fingers down
                         clearTimeout(longTouchTimeout);
@@ -106126,14 +106176,14 @@ class AngleMeasurementsTouchControl extends AngleMeasurementsControl {
                                     }
                                 }
                             }
-                            this._touchState = WAITING_FOR_TARGET_LONG_TOUCH_END$1;
+                            this._touchState = WAITING_FOR_TARGET_LONG_TOUCH_END$2;
                            // console.log("touchstart: this._touchState= WAITING_FOR_TARGET_TOUCH_START -> WAITING_FOR_TARGET_LONG_TOUCH_END")
 
                             disableCameraNavigation();
 
                         }, this._longTouchTimeoutMs);
 
-                        this._touchState = WAITING_FOR_TARGET_QUICK_TOUCH_END$1;
+                        this._touchState = WAITING_FOR_TARGET_QUICK_TOUCH_END$2;
                        // console.log("touchstart: this._touchState= WAITING_FOR_TARGET_TOUCH_START -> WAITING_FOR_TARGET_QUICK_TOUCH_END")
                     }
 
@@ -106147,7 +106197,7 @@ class AngleMeasurementsTouchControl extends AngleMeasurementsControl {
                         clearTimeout(longTouchTimeout);
                         longTouchTimeout = null;
                     }
-                    this._touchState = TOUCH_CANCELING$1;
+                    this._touchState = TOUCH_CANCELING$2;
                   //  console.log("touchstart: this._touchState= default -> TOUCH_CANCELING")
                     return;
             }
@@ -106181,7 +106231,7 @@ class AngleMeasurementsTouchControl extends AngleMeasurementsControl {
 
             switch (this._touchState) {
 
-                case WAITING_FOR_ORIGIN_LONG_TOUCH_END$1:
+                case WAITING_FOR_ORIGIN_LONG_TOUCH_END$2:
                     if (this.pointerLens) {
                         this.pointerLens.canvasPos = touchMoveCanvasPos;
                     }
@@ -106216,7 +106266,7 @@ class AngleMeasurementsTouchControl extends AngleMeasurementsControl {
                             }
                         }
                     }
-                    this._touchState = WAITING_FOR_ORIGIN_LONG_TOUCH_END$1;
+                    this._touchState = WAITING_FOR_ORIGIN_LONG_TOUCH_END$2;
                    // console.log("touchmove: this._touchState= WAITING_FOR_ORIGIN_LONG_TOUCH_END -> WAITING_FOR_ORIGIN_LONG_TOUCH_END")
                     break;
 
@@ -106227,7 +106277,7 @@ class AngleMeasurementsTouchControl extends AngleMeasurementsControl {
                         if (this.pointerLens) {
                             this.pointerLens.visible = false;
                         }
-                        this._touchState = TOUCH_CANCELING$1;
+                        this._touchState = TOUCH_CANCELING$2;
                      //   console.log("touchmove: this._touchState= QUICK_TOUCH_FINDING_CORNER -> TOUCH_CANCELING")
                         return;
                     }
@@ -106276,14 +106326,14 @@ class AngleMeasurementsTouchControl extends AngleMeasurementsControl {
                     break;
 
 
-                case WAITING_FOR_TARGET_LONG_TOUCH_END$1:
+                case WAITING_FOR_TARGET_LONG_TOUCH_END$2:
                     if (currentNumTouches !== 1 && longTouchTimeout !== null) { // Two or more fingers down
                         clearTimeout(longTouchTimeout);
                         longTouchTimeout = null;
                         if (this.pointerLens) {
                             this.pointerLens.visible = false;
                         }
-                        this._touchState = TOUCH_CANCELING$1;
+                        this._touchState = TOUCH_CANCELING$2;
                       //  console.log("touchmove: this._touchState= QUICK_TOUCH_FINDING_TARGET -> TOUCH_CANCELING")
                         return;
                     }
@@ -106328,7 +106378,7 @@ class AngleMeasurementsTouchControl extends AngleMeasurementsControl {
                             this._currentAngleMeasurement.angleVisible = true;
                         }
                     }
-                    this._touchState = WAITING_FOR_TARGET_LONG_TOUCH_END$1;
+                    this._touchState = WAITING_FOR_TARGET_LONG_TOUCH_END$2;
                     break;
             }
         }, {passive: true});
@@ -106360,13 +106410,13 @@ class AngleMeasurementsTouchControl extends AngleMeasurementsControl {
 
             switch (this._touchState) {
 
-                case WAITING_FOR_ORIGIN_QUICK_TOUCH_END$1: {
+                case WAITING_FOR_ORIGIN_QUICK_TOUCH_END$2: {
                     if (numChangedTouches !== 1 ||
                         touchX > touchStartCanvasPos[0] + touchTolerance ||
                         touchX < touchStartCanvasPos[0] - touchTolerance ||
                         touchY > touchStartCanvasPos[1] + touchTolerance ||
                         touchY < touchStartCanvasPos[1] - touchTolerance) {
-                        this._touchState = WAITING_FOR_ORIGIN_TOUCH_START$1;
+                        this._touchState = WAITING_FOR_ORIGIN_TOUCH_START$2;
                         return;
                     }
                     const pickResult = scene.pick({
@@ -106401,14 +106451,14 @@ class AngleMeasurementsTouchControl extends AngleMeasurementsControl {
                             this._currentAngleMeasurement.destroy();
                             this._currentAngleMeasurement = null;
                         }
-                        this._touchState = WAITING_FOR_ORIGIN_TOUCH_START$1;
+                        this._touchState = WAITING_FOR_ORIGIN_TOUCH_START$2;
                       //  console.log("touchend: this._touchState= WAITING_FOR_ORIGIN_QUICK_TOUCH_END -> WAITING_FOR_ORIGIN_TOUCH_START")
                     }
                 }
                     enableCameraNavigation();
                     break;
 
-                case WAITING_FOR_ORIGIN_LONG_TOUCH_END$1:
+                case WAITING_FOR_ORIGIN_LONG_TOUCH_END$2:
                     if (this.pointerLens) {
                         this.pointerLens.visible = false;
                     }
@@ -106417,7 +106467,7 @@ class AngleMeasurementsTouchControl extends AngleMeasurementsControl {
                             this.pointerLens.snapped = false;
                             this.pointerLens.visible = false;
                         }
-                        this._touchState = WAITING_FOR_ORIGIN_TOUCH_START$1;
+                        this._touchState = WAITING_FOR_ORIGIN_TOUCH_START$2;
                       //  console.log("touchend: this._touchState= WAITING_FOR_ORIGIN_LONG_TOUCH_END (no measurement) -> WAITING_FOR_ORIGIN_TOUCH_START")
                     } else {
                         this._touchState = WAITING_FOR_CORNER_TOUCH_START;
@@ -106448,14 +106498,14 @@ class AngleMeasurementsTouchControl extends AngleMeasurementsControl {
                         this._currentAngleMeasurement.targetVisible = false;
                         this._currentAngleMeasurement.targetWireVisible = false;
                         this._currentAngleMeasurement.angleVisible = false;
-                        this._touchState = WAITING_FOR_TARGET_TOUCH_START$1;
+                        this._touchState = WAITING_FOR_TARGET_TOUCH_START$2;
                        // console.log("touchend: this._touchState= WAITING_FOR_CORNER_TOUCH_START -> WAITING_FOR_ORIGIN_TOUCH_START")
                     } else {
                         if (this._currentAngleMeasurement) {
                             this._currentAngleMeasurement.destroy();
                             this._currentAngleMeasurement = null;
                         }
-                        this._touchState = WAITING_FOR_ORIGIN_TOUCH_START$1;
+                        this._touchState = WAITING_FOR_ORIGIN_TOUCH_START$2;
                        // console.log("touchend: this._touchState= WAITING_FOR_CORNER_TOUCH_START -> WAITING_FOR_ORIGIN_TOUCH_START")
                     }
 
@@ -106467,18 +106517,18 @@ class AngleMeasurementsTouchControl extends AngleMeasurementsControl {
                     if (this.pointerLens) {
                         this.pointerLens.visible = false;
                     }
-                    this._touchState = WAITING_FOR_TARGET_TOUCH_START$1;
+                    this._touchState = WAITING_FOR_TARGET_TOUCH_START$2;
                   //  console.log("touchend: this._touchState= WAITING_FOR_CORNER_LONG_TOUCH_END  -> WAITING_FOR_ORIGIN_TOUCH_START")
                     enableCameraNavigation();
                     break;
 
-                case WAITING_FOR_TARGET_QUICK_TOUCH_END$1: {
+                case WAITING_FOR_TARGET_QUICK_TOUCH_END$2: {
                     if (numChangedTouches !== 1 ||
                         touchX > touchStartCanvasPos[0] + touchTolerance ||
                         touchX < touchStartCanvasPos[0] - touchTolerance ||
                         touchY > touchStartCanvasPos[1] + touchTolerance ||
                         touchY < touchStartCanvasPos[1] - touchTolerance) {
-                        this._touchState = WAITING_FOR_TARGET_TOUCH_START$1;
+                        this._touchState = WAITING_FOR_TARGET_TOUCH_START$2;
                         return;
                     }
                     const pickResult = scene.pick({
@@ -106502,13 +106552,13 @@ class AngleMeasurementsTouchControl extends AngleMeasurementsControl {
                             this._currentAngleMeasurement = null;
                         }
                     }
-                    this._touchState = WAITING_FOR_ORIGIN_TOUCH_START$1;
+                    this._touchState = WAITING_FOR_ORIGIN_TOUCH_START$2;
                    // console.log("touchend: this._touchState= WAITING_FOR_TARGET_TOUCH_START -> WAITING_FOR_ORIGIN_TOUCH_START")
                 }
                     enableCameraNavigation();
                     break;
 
-                case WAITING_FOR_TARGET_LONG_TOUCH_END$1:
+                case WAITING_FOR_TARGET_LONG_TOUCH_END$2:
                     if (this.pointerLens) {
                         this.pointerLens.visible = false;
                     }
@@ -106517,13 +106567,13 @@ class AngleMeasurementsTouchControl extends AngleMeasurementsControl {
                             this._currentAngleMeasurement.destroy();
                             this._currentAngleMeasurement = null;
                         }
-                        this._touchState = WAITING_FOR_ORIGIN_TOUCH_START$1;
+                        this._touchState = WAITING_FOR_ORIGIN_TOUCH_START$2;
                        // console.log("touchend: this._touchState= WAITING_FOR_TARGET_LONG_TOUCH_END (no target found) -> WAITING_FOR_ORIGIN_TOUCH_START")
                     } else {
                         this._currentAngleMeasurement.clickable = true;
                         this.angleMeasurementsPlugin.fire("measurementEnd", this._currentAngleMeasurement);
                         this._currentAngleMeasurement = null;
-                        this._touchState = WAITING_FOR_ORIGIN_TOUCH_START$1;
+                        this._touchState = WAITING_FOR_ORIGIN_TOUCH_START$2;
                        // console.log("touchend: this._touchState= WAITING_FOR_TARGET_LONG_TOUCH_END  -> WAITING_FOR_ORIGIN_TOUCH_START")
                     }
                     enableCameraNavigation();
@@ -109811,7 +109861,7 @@ class DistanceMeasurementsControl extends Component {
     }
 }
 
-const MOUSE_FIRST_CLICK_EXPECTED = 0;
+const MOUSE_FIRST_CLICK_EXPECTED$1 = 0;
 
 /**
  * Creates {@link DistanceMeasurement}s in a {@link DistanceMeasurementsPlugin} from mouse input.
@@ -109884,7 +109934,7 @@ class DistanceMeasurementsMouseControl extends DistanceMeasurementsControl {
         this._initMarkerDiv();
 
         this._snapping = cfg.snapping !== false;
-        this._mouseState = MOUSE_FIRST_CLICK_EXPECTED;
+        this._mouseState = MOUSE_FIRST_CLICK_EXPECTED$1;
 
         this._attachPlugin(distanceMeasurementsPlugin, cfg);
     }
@@ -109988,7 +110038,7 @@ class DistanceMeasurementsMouseControl extends DistanceMeasurementsControl {
         const clickTolerance = 20;
         let hoveredEntity = null;
 
-        this._mouseState = MOUSE_FIRST_CLICK_EXPECTED;
+        this._mouseState = MOUSE_FIRST_CLICK_EXPECTED$1;
 
         const pagePos = math.vec2();
 
@@ -109997,7 +110047,7 @@ class DistanceMeasurementsMouseControl extends DistanceMeasurementsControl {
                 mouseHovering = true;
                 pointerWorldPos.set(event.worldPos);
                 pointerCanvasPos.set(event.canvasPos);
-                if (this._mouseState === MOUSE_FIRST_CLICK_EXPECTED) {
+                if (this._mouseState === MOUSE_FIRST_CLICK_EXPECTED$1) {
 
                     if (this._canvasToPagePos) {
                         this._canvasToPagePos(canvas, canvasPos, pagePos);
@@ -110183,7 +110233,7 @@ class DistanceMeasurementsMouseControl extends DistanceMeasurementsControl {
             this._currentDistanceMeasurement = null;
         }
 
-        this._mouseState = MOUSE_FIRST_CLICK_EXPECTED;
+        this._mouseState = MOUSE_FIRST_CLICK_EXPECTED$1;
     }
 
     /**
@@ -110785,15 +110835,15 @@ class DistanceMeasurementsPlugin extends Plugin {
   }
 }
 
-const WAITING_FOR_ORIGIN_TOUCH_START = 0;
-const WAITING_FOR_ORIGIN_QUICK_TOUCH_END = 1;
-const WAITING_FOR_ORIGIN_LONG_TOUCH_END = 2;
+const WAITING_FOR_ORIGIN_TOUCH_START$1 = 0;
+const WAITING_FOR_ORIGIN_QUICK_TOUCH_END$1 = 1;
+const WAITING_FOR_ORIGIN_LONG_TOUCH_END$1 = 2;
 
-const WAITING_FOR_TARGET_TOUCH_START = 3;
-const WAITING_FOR_TARGET_QUICK_TOUCH_END = 4;
-const WAITING_FOR_TARGET_LONG_TOUCH_END = 5;
+const WAITING_FOR_TARGET_TOUCH_START$1 = 3;
+const WAITING_FOR_TARGET_QUICK_TOUCH_END$1 = 4;
+const WAITING_FOR_TARGET_LONG_TOUCH_END$1 = 5;
 
-const TOUCH_CANCELING = 7;
+const TOUCH_CANCELING$1 = 7;
 
 const tmpVec2 = math.vec2();
 
@@ -110914,7 +110964,7 @@ class DistanceMeasurementsTouchControl extends DistanceMeasurementsControl {
 
         let longTouchTimeout = null;
 
-        this._touchState = WAITING_FOR_ORIGIN_TOUCH_START;
+        this._touchState = WAITING_FOR_ORIGIN_TOUCH_START$1;
 
         const touchStartCanvasPos = math.vec2();
         const touchMoveCanvasPos = math.vec2();
@@ -110940,7 +110990,7 @@ class DistanceMeasurementsTouchControl extends DistanceMeasurementsControl {
                 this._currentDistanceMeasurement = null;
             }
             enableCameraNavigation();
-            this._touchState = WAITING_FOR_ORIGIN_TOUCH_START;
+            this._touchState = WAITING_FOR_ORIGIN_TOUCH_START$1;
         };
 
         const copyCanvasPos = (event, dst) => {
@@ -110974,7 +111024,7 @@ class DistanceMeasurementsTouchControl extends DistanceMeasurementsControl {
 
             switch (this._touchState) {
 
-                case WAITING_FOR_ORIGIN_TOUCH_START:
+                case WAITING_FOR_ORIGIN_TOUCH_START$1:
                     if (currentNumTouches !== 1 && longTouchTimeout !== null) { // Two or more fingers down
                         cancel();
                         return;
@@ -111050,11 +111100,11 @@ class DistanceMeasurementsTouchControl extends DistanceMeasurementsControl {
                         //     this.pointerLens.cursorPos = pickResult.canvasPos;
                         //     this.pointerLens.snapped = false;
                         // }
-                        this._touchState = WAITING_FOR_ORIGIN_LONG_TOUCH_END;
+                        this._touchState = WAITING_FOR_ORIGIN_LONG_TOUCH_END$1;
                         // console.log("touchstart: this._touchState= WAITING_FOR_ORIGIN_TOUCH_START -> WAITING_FOR_ORIGIN_LONG_TOUCH_END")
                         disableCameraNavigation();
                     }, this._longTouchTimeoutMs);
-                    this._touchState = WAITING_FOR_ORIGIN_QUICK_TOUCH_END;
+                    this._touchState = WAITING_FOR_ORIGIN_QUICK_TOUCH_END$1;
                     // console.log("touchstart: this._touchState= WAITING_FOR_ORIGIN_TOUCH_START -> WAITING_FOR_ORIGIN_QUICK_TOUCH_END")
 
                     touchId = touch.identifier;
@@ -111062,7 +111112,7 @@ class DistanceMeasurementsTouchControl extends DistanceMeasurementsControl {
                     break;
 
 
-                case WAITING_FOR_TARGET_TOUCH_START:
+                case WAITING_FOR_TARGET_TOUCH_START$1:
 
                     if (currentNumTouches !== 1 && longTouchTimeout !== null) { // Two or more fingers down
                         clearTimeout(longTouchTimeout);
@@ -111132,14 +111182,14 @@ class DistanceMeasurementsTouchControl extends DistanceMeasurementsControl {
                                     }
                                 }
                             }
-                            this._touchState = WAITING_FOR_TARGET_LONG_TOUCH_END;
+                            this._touchState = WAITING_FOR_TARGET_LONG_TOUCH_END$1;
                             // console.log("touchstart: this._touchState= WAITING_FOR_TARGET_TOUCH_START -> WAITING_FOR_TARGET_LONG_TOUCH_END")
 
                             disableCameraNavigation();
 
                         }, this._longTouchTimeoutMs);
 
-                        this._touchState = WAITING_FOR_TARGET_QUICK_TOUCH_END;
+                        this._touchState = WAITING_FOR_TARGET_QUICK_TOUCH_END$1;
                         // console.log("touchstart: this._touchState= WAITING_FOR_TARGET_TOUCH_START -> WAITING_FOR_TARGET_QUICK_TOUCH_END")
                     }
 
@@ -111152,7 +111202,7 @@ class DistanceMeasurementsTouchControl extends DistanceMeasurementsControl {
                         clearTimeout(longTouchTimeout);
                         longTouchTimeout = null;
                     }
-                    this._touchState = TOUCH_CANCELING;
+                    this._touchState = TOUCH_CANCELING$1;
                     // console.log("touchstart: this._touchState= default -> TOUCH_CANCELING")
                     return;
             }
@@ -111186,7 +111236,7 @@ class DistanceMeasurementsTouchControl extends DistanceMeasurementsControl {
 
             switch (this._touchState) {
 
-                case WAITING_FOR_ORIGIN_LONG_TOUCH_END:
+                case WAITING_FOR_ORIGIN_LONG_TOUCH_END$1:
                     if (this.pointerLens) {
                         this.pointerLens.canvasPos = touchMoveCanvasPos;
                     }
@@ -111269,7 +111319,7 @@ class DistanceMeasurementsTouchControl extends DistanceMeasurementsControl {
                             }
                         }
                     }
-                    this._touchState = WAITING_FOR_ORIGIN_LONG_TOUCH_END;
+                    this._touchState = WAITING_FOR_ORIGIN_LONG_TOUCH_END$1;
                     // console.log("touchmove: this._touchState= WAITING_FOR_ORIGIN_LONG_TOUCH_END -> WAITING_FOR_ORIGIN_LONG_TOUCH_END")
                     break;
 
@@ -111278,14 +111328,14 @@ class DistanceMeasurementsTouchControl extends DistanceMeasurementsControl {
                 //     console.log("touchmove: this._touchState= WAITING_FOR_TARGET_TOUCH_START -> WAITING_FOR_TARGET_TOUCH_START")
                 //     break;
 
-                case WAITING_FOR_TARGET_LONG_TOUCH_END:
+                case WAITING_FOR_TARGET_LONG_TOUCH_END$1:
                     if (currentNumTouches !== 1 && longTouchTimeout !== null) { // Two or more fingers down
                         clearTimeout(longTouchTimeout);
                         longTouchTimeout = null;
                         if (this.pointerLens) {
                             this.pointerLens.visible = false;
                         }
-                        this._touchState = TOUCH_CANCELING;
+                        this._touchState = TOUCH_CANCELING$1;
                         // console.log("touchmove: this._touchState= QUICK_TOUCH_FINDING_TARGET -> TOUCH_CANCELING")
                         return;
                     }
@@ -111325,7 +111375,7 @@ class DistanceMeasurementsTouchControl extends DistanceMeasurementsControl {
 
                         }
                     }
-                    this._touchState = WAITING_FOR_TARGET_LONG_TOUCH_END;
+                    this._touchState = WAITING_FOR_TARGET_LONG_TOUCH_END$1;
                     break;
             }
         }, {passive: true});
@@ -111357,13 +111407,13 @@ class DistanceMeasurementsTouchControl extends DistanceMeasurementsControl {
 
             switch (this._touchState) {
 
-                case WAITING_FOR_ORIGIN_QUICK_TOUCH_END: {
+                case WAITING_FOR_ORIGIN_QUICK_TOUCH_END$1: {
                     if (numChangedTouches !== 1 ||
                         touchX > touchStartCanvasPos[0] + touchTolerance ||
                         touchX < touchStartCanvasPos[0] - touchTolerance ||
                         touchY > touchStartCanvasPos[1] + touchTolerance ||
                         touchY < touchStartCanvasPos[1] - touchTolerance) {
-                        this._touchState = WAITING_FOR_ORIGIN_TOUCH_START;
+                        this._touchState = WAITING_FOR_ORIGIN_TOUCH_START$1;
                         return;
                     }
                     const pickResult = scene.pick({
@@ -111390,21 +111440,21 @@ class DistanceMeasurementsTouchControl extends DistanceMeasurementsControl {
                         this._currentDistanceMeasurement.originVisible = true;
                         this._currentDistanceMeasurement.targetVisible = false;
                         this._currentDistanceMeasurement.clickable = false;
-                        this._touchState = WAITING_FOR_TARGET_TOUCH_START;
+                        this._touchState = WAITING_FOR_TARGET_TOUCH_START$1;
                         this.distanceMeasurementsPlugin.fire("measurementStart", this._currentDistanceMeasurement);
                         //  console.log("touchend: this._touchState= WAITING_FOR_ORIGIN_QUICK_TOUCH_END -> WAITING_FOR_ORIGIN_TOUCH_START")
                     } else {
                         if (this._currentDistanceMeasurement) {
                             this._currentDistanceMeasurement.destroy();
                         }
-                        this._touchState = WAITING_FOR_ORIGIN_TOUCH_START;
+                        this._touchState = WAITING_FOR_ORIGIN_TOUCH_START$1;
                         //  console.log("touchend: this._touchState= WAITING_FOR_ORIGIN_QUICK_TOUCH_END -> WAITING_FOR_ORIGIN_TOUCH_START")
                     }
                 }
                     enableCameraNavigation();
                     break;
 
-                case WAITING_FOR_ORIGIN_LONG_TOUCH_END:
+                case WAITING_FOR_ORIGIN_LONG_TOUCH_END$1:
                     if (this.pointerLens) {
                         this.pointerLens.visible = false;
                     }
@@ -111413,22 +111463,22 @@ class DistanceMeasurementsTouchControl extends DistanceMeasurementsControl {
                             this.pointerLens.snapped = false;
                             this.pointerLens.visible = false;
                         }
-                        this._touchState = WAITING_FOR_ORIGIN_TOUCH_START;
+                        this._touchState = WAITING_FOR_ORIGIN_TOUCH_START$1;
                         //  console.log("touchend: this._touchState= WAITING_FOR_ORIGIN_LONG_TOUCH_END (no measurement) -> WAITING_FOR_ORIGIN_TOUCH_START")
                     } else {
-                        this._touchState = WAITING_FOR_TARGET_TOUCH_START;
+                        this._touchState = WAITING_FOR_TARGET_TOUCH_START$1;
                         //  console.log("touchend: this._touchState= WAITING_FOR_ORIGIN_LONG_TOUCH_END (picked, begin measurement) -> WAITING_FOR_TARGET_TOUCH_START")
                     }
                     enableCameraNavigation();
                     break;
 
-                case WAITING_FOR_TARGET_QUICK_TOUCH_END: {
+                case WAITING_FOR_TARGET_QUICK_TOUCH_END$1: {
                     if (numChangedTouches !== 1 ||
                         touchX > touchStartCanvasPos[0] + touchTolerance ||
                         touchX < touchStartCanvasPos[0] - touchTolerance ||
                         touchY > touchStartCanvasPos[1] + touchTolerance ||
                         touchY < touchStartCanvasPos[1] - touchTolerance) {
-                        this._touchState = WAITING_FOR_TARGET_TOUCH_START;
+                        this._touchState = WAITING_FOR_TARGET_TOUCH_START$1;
                         return;
                     }
                     const pickResult = scene.pick({
@@ -111453,13 +111503,13 @@ class DistanceMeasurementsTouchControl extends DistanceMeasurementsControl {
                             this._currentDistanceMeasurement = null;
                         }
                     }
-                    this._touchState = WAITING_FOR_ORIGIN_TOUCH_START;
+                    this._touchState = WAITING_FOR_ORIGIN_TOUCH_START$1;
                     //  console.log("touchend: this._touchState= WAITING_FOR_TARGET_TOUCH_START -> WAITING_FOR_ORIGIN_TOUCH_START")
                 }
                     enableCameraNavigation();
                     break;
 
-                case WAITING_FOR_TARGET_LONG_TOUCH_END:
+                case WAITING_FOR_TARGET_LONG_TOUCH_END$1:
                     console.log('long touch');
                     if (this.pointerLens) {
                         this.pointerLens.visible = false;
@@ -111469,13 +111519,13 @@ class DistanceMeasurementsTouchControl extends DistanceMeasurementsControl {
                             this._currentDistanceMeasurement.destroy();
                             this._currentDistanceMeasurement = null;
                         }
-                        this._touchState = WAITING_FOR_ORIGIN_TOUCH_START;
+                        this._touchState = WAITING_FOR_ORIGIN_TOUCH_START$1;
                         //  console.log("touchend: this._touchState= WAITING_FOR_TARGET_LONG_TOUCH_END (no target found) -> WAITING_FOR_ORIGIN_TOUCH_START")
                     } else {
                         this._currentDistanceMeasurement.clickable = true;
                         this.distanceMeasurementsPlugin.fire("measurementEnd", this._currentDistanceMeasurement);
                         this._currentDistanceMeasurement = null;
-                        this._touchState = WAITING_FOR_ORIGIN_TOUCH_START;
+                        this._touchState = WAITING_FOR_ORIGIN_TOUCH_START$1;
                         //  console.log("touchend: this._touchState= WAITING_FOR_TARGET_LONG_TOUCH_END  -> WAITING_FOR_ORIGIN_TOUCH_START")
                     }
                     enableCameraNavigation();
@@ -120522,9 +120572,9 @@ class TreeViewPlugin extends Plugin {
                 } else {
                     parent.numVisibleEntities--;
                 }
-                const indeterminate = this._showIndeterminate 
-                  && parent.numVisibleEntities > 0 
-                  && parent.numVisibleEntities < parent.numEntities;
+                const indeterminate = this._showIndeterminate
+                    && parent.numVisibleEntities > 0
+                    && parent.numVisibleEntities < parent.numEntities;
                 parent.checked = parent.numVisibleEntities > 0;
                 this._renderService.setCheckbox(parent.nodeId, parent.checked, indeterminate);
 
@@ -120581,7 +120631,7 @@ class TreeViewPlugin extends Plugin {
             const checkedNode = this._nodeNodes[nodeId];
             const objects = this._viewer.scene.objects;
             let numUpdated = 0;
-            
+
             this._withNodeTree(checkedNode, (node) => {
                 const objectId = node.objectId;
                 const entity = objects[objectId];
@@ -120593,7 +120643,7 @@ class TreeViewPlugin extends Plugin {
                 node.checked = visible;
 
                 this._renderService.setCheckbox(node.nodeId, visible);
-                
+
                 if (entity) {
                     entity.visible = visible;
                 }
@@ -120601,21 +120651,22 @@ class TreeViewPlugin extends Plugin {
 
             let parent = checkedNode.parent;
             while (parent) {
-                
+
                 if (visible) {
                     parent.numVisibleEntities += numUpdated;
                 } else {
                     parent.numVisibleEntities -= numUpdated;
                 }
-                const indeterminate = this._showIndeterminate 
-                  && parent.numVisibleEntities > 0 
-                  && parent.numVisibleEntities < parent.numEntities;
+                const indeterminate = this._showIndeterminate
+                    && parent.numVisibleEntities > 0
+                    && parent.numVisibleEntities < parent.numEntities;
                 parent.checked = parent.numVisibleEntities > 0;
                 this._renderService.setCheckbox(parent.nodeId, parent.checked, indeterminate);
-                
+
                 parent = parent.parent;
             }
             this._muteSceneEvents = false;
+            this.updateSwitchState();
         };
 
         this._hierarchy = cfg.hierarchy || "containment";
@@ -120714,7 +120765,7 @@ class TreeViewPlugin extends Plugin {
         if (options && options.rootName) {
             this._rootNames[modelId] = options.rootName;
         }
-        
+
         model.on("destroyed", () => {
             this.removeModel(model.id);
         });
@@ -120779,7 +120830,7 @@ class TreeViewPlugin extends Plugin {
             switchElement.scrollIntoView();
             return true;
         }
-        
+
         const path = [];
         path.unshift(node);
         let parent = node.parent;
@@ -120813,7 +120864,7 @@ class TreeViewPlugin extends Plugin {
         }
 
         this._renderService.setHighlighted(this._showListItemElementId, false);
-        
+
         this._showListItemElementId = null;
     }
 
@@ -120873,6 +120924,36 @@ class TreeViewPlugin extends Plugin {
         }
         for (let i = 0, len = children.length; i < len; i++) {
             this.withNodeTree(children[i], callback);
+        }
+    }
+
+    updateSwitchState() {
+        let allChecked = true;
+
+        // Kiểm tra tất cả các nút trong cây
+        for (const nodeId in this._nodeNodes) {
+            const node = this._nodeNodes[nodeId];
+            if (!node.checked) {
+                allChecked = false;
+                break;
+            }
+        }
+
+        // Cập nhật trạng thái của switch
+        const switchInputObj = document.querySelector('.xeokit-check-loadAllObjects');
+        const switchInputCls = document.querySelector('.xeokit-check-loadAllClasses');
+        const switchInputStr = document.querySelector('.xeokit-check-loadAllStoreys');
+        if (switchInputObj) {
+
+            switchInputObj.checked = allChecked;
+        }
+        if (switchInputCls) {
+
+            switchInputCls.checked = allChecked;
+        }
+        if (switchInputStr) {
+
+            switchInputStr.checked = allChecked;
         }
     }
 
@@ -121074,8 +121155,8 @@ class TreeViewPlugin extends Plugin {
                 parent: projectNode,
                 numEntities: 0,
                 numVisibleEntities: 0,
-                checked: false,
-                xrayed: false,
+                checked: true,
+                xrayed: true,
                 children: []
             };
             if (projectNode) {
@@ -121098,8 +121179,8 @@ class TreeViewPlugin extends Plugin {
                 parent: buildingNode,
                 numEntities: 0,
                 numVisibleEntities: 0,
-                checked: false,
-                xrayed: false,
+                checked: true,
+                xrayed: true,
                 children: []
             };
             buildingNode.children.push(storeyNode);
@@ -121294,7 +121375,7 @@ class TreeViewPlugin extends Plugin {
             return;
         }
         const firstChild = children[0];
-        if ((this._hierarchy === "storeys" || this._hierarchy === "containment") &&  firstChild.type === "IfcBuildingStorey") {
+        if ((this._hierarchy === "storeys" || this._hierarchy === "containment") && firstChild.type === "IfcBuildingStorey") {
             if (this._elevationSortFunction) children.sort(this._elevationSortFunction);
             else children.sort(this._getSpatialSortFunc());
         } else {
@@ -121381,6 +121462,7 @@ class TreeViewPlugin extends Plugin {
                 }
             }
         }
+        this.updateSwitchState();
     }
 
     _withNodeTree(node, callback) {
@@ -121412,8 +121494,8 @@ class TreeViewPlugin extends Plugin {
     }
 
     _createNodeElement(node) {
-        const contextmenuHandler = (event) =>{
-                this.fire("contextmenu", {
+        const contextmenuHandler = (event) => {
+            this.fire("contextmenu", {
                 event: event,
                 viewer: this._viewer,
                 treeViewPlugin: this,
@@ -121435,7 +121517,7 @@ class TreeViewPlugin extends Plugin {
     }
 
     _expandSwitchElement(switchElement) {
-        const expanded = this._renderService.isExpanded(switchElement); 
+        const expanded = this._renderService.isExpanded(switchElement);
         if (expanded) {
             return;
         }
@@ -137175,6 +137257,1867 @@ class ZoneTranslateTouchControl extends ZoneTranslateControl {
     }
 }
 
+/**
+ * Creates {@link DistanceMeasurement}s in a {@link DistanceMeasurementsPlugin} from user input.
+ *
+ * @interface
+ * @abstract
+ */
+class IssuesControl extends Component {
+    /**
+     * Gets if this IssuesControl is currently active, where it is responding to input.
+     *
+     * @returns {boolean} True if this IssuesControl is active.
+     * @abstract
+     */
+    get active() {}
+  
+    /**
+     * Sets whether snap-to-vertex and snap-to-edge are enabled for this IssuesControl.
+     *
+     * This is `true` by default.
+     *
+     * Internally, this deactivates then activates the IssuesControl when changed, which means that
+     * it will destroy any Issues currently under construction, and incurs some overhead, since it unbinds
+     * and rebinds various input handlers.
+     *
+     * @param {boolean} snapping Whether to enable snap-to-vertex and snap-edge for this IssuesControl.
+     */
+    set snapping(snapping) {}
+  
+    /**
+     * Gets whether snap-to-vertex and snap-to-edge are enabled for this IssuesControl.
+     *
+     * This is `true` by default.
+     *
+     * @returns {boolean} Whether snap-to-vertex and snap-to-edge are enabled for this IssuesControl.
+     */
+    get snapping() {
+      return true;
+    }
+  
+    /**
+     * Activates this IssuesControl, ready to respond to input.
+     *
+     * @abstract
+     */
+    activate() {}
+  
+    /**
+     * Deactivates this IssuesControl, making it unresponsive to input.
+     *
+     * Destroys any {@link DistanceMeasurement} under construction by this IssuesControl.
+     *
+     * @abstract
+     */
+    deactivate() {}
+  
+    /**
+     * Resets this IssuesControl.
+     *
+     * Destroys any {@link DistanceMeasurement} under construction by this IssuesControl.
+     *
+     * Does nothing if the IssuesControl is not active.
+     *
+     * @abstract
+     */
+    reset() {}
+  
+    /**
+     * Gets the {@link DistanceMeasurement} under construction by this IssuesControl, if any.
+     *
+     * @returns {null|DistanceMeasurement}
+     *
+     * @abstract
+     */
+    get currentMeasurement() {
+      return null;
+    }
+  
+    /**
+     * Destroys this IssuesControl.
+     *
+     * Destroys any {@link DistanceMeasurement} under construction by this IssuesControl.
+     *
+     * @abstract
+     */
+    destroy() {}
+  }
+
+const MOUSE_FIRST_CLICK_EXPECTED = 0;
+
+class IssuesMouseControl extends IssuesControl {
+  /**
+   * Creates a IssuesMouseControl bound to the given IssuesPlugin.
+   *
+   * @param {IssuesPlugin} IssuesPlugin The AngleMeasurementsPlugin to control.
+   * @param [cfg] Configuration
+   * @param {function} [cfg.canvasToPagePos] Optional function to map canvas-space coordinates to page coordinates.
+   * @param {PointerLens} [cfg.pointerLens] A PointerLens to use to provide a magnified view of the cursor when snapping is enabled.
+   * @param {boolean} [cfg.snapping=true] Whether to initially enable snap-to-vertex and snap-to-edge for this IssuesMouseControl.
+   */
+  constructor(IssuesPlugin, cfg = {}) {
+    super(IssuesPlugin.viewer.scene);
+
+    this._canvasToPagePos = cfg.canvasToPagePos;
+
+    this.pointerLens = cfg.pointerLens;
+
+    this._active = false;
+
+    this._currentDistanceMeasurement = null;
+
+    this._currentDistanceMeasurementInitState = {
+      wireVisible: null,
+      axisVisible: null,
+      xAxisVisible: null,
+      yaxisVisible: null,
+      zAxisVisible: null,
+      targetVisible: null,
+    };
+
+    this._initMarkerDiv();
+
+    this._onCameraControlHoverSnapOrSurface = null;
+    this._onCameraControlHoverSnapOrSurfaceOff = null;
+    this._onMouseDown = null;
+    this._onMouseUp = null;
+    this._onCanvasTouchStart = null;
+    this._onCanvasTouchEnd = null;
+    this._snapping = cfg.snapping !== false;
+    this._mouseState = MOUSE_FIRST_CLICK_EXPECTED;
+
+    this._attachPlugin(IssuesPlugin, cfg);
+  }
+
+  _initMarkerDiv() {
+    const markerDiv = document.createElement('div');
+    markerDiv.setAttribute('id', 'myMarkerDiv');
+    const canvas = this.scene.canvas.canvas;
+    canvas.parentNode.insertBefore(markerDiv, canvas);
+    markerDiv.style.background = 'black';
+    markerDiv.style.border = '2px solid blue';
+    markerDiv.style.borderRadius = '10px';
+    markerDiv.style.width = '5px';
+    markerDiv.style.height = '5px';
+    markerDiv.style.top = '-200px';
+    markerDiv.style.left = '-200px';
+    markerDiv.style.margin = '0 0';
+    markerDiv.style.zIndex = '100';
+    markerDiv.style.position = 'absolute';
+    markerDiv.style.pointerEvents = 'none';
+
+    this._markerDiv = markerDiv;
+  }
+
+  _destroyMarkerDiv() {
+    try {
+      if (this._markerDiv) {
+        const element = document.getElementById('myMarkerDiv');
+        element.parentNode.removeChild(element);
+        this._markerDiv = null;
+      }
+    } catch {
+      return;
+    }
+  }
+
+  _attachPlugin(IssuesPlugin, cfg = {}) {
+    /**
+     * The {@link IssuesPlugin} that owns this IssuesMouseControl.
+     * @type {IssuesPlugin}
+     */
+    this.IssuesPlugin = IssuesPlugin;
+
+    /**
+     * The {@link IssuesPlugin} that owns this IssuesMouseControl.
+     * @type {IssuesPlugin}
+     */
+    this.plugin = IssuesPlugin;
+  }
+
+  /**
+   * Gets if this IssuesMouseControl is currently active, where it is responding to input.
+   *
+   * @returns {boolean} True if this IssuesMouseControl is active.
+   */
+  get active() {
+    return this._active;
+  }
+
+  /**
+   * Sets whether snap-to-vertex and snap-to-edge are enabled for this IssuesMouseControl.
+   *
+   * This is `true` by default.
+   *
+   * Internally, this deactivates then activates the IssuesMouseControl when changed, which means that
+   * it will destroy any Issues currently under construction, and incurs some overhead, since it unbinds
+   * and rebinds various input handlers.
+   *
+   * @param snapping
+   */
+  set snapping(snapping) {
+    if (snapping !== this._snapping) {
+      this._snapping = snapping;
+      this.deactivate();
+      this.activate();
+    } else {
+      this._snapping = snapping;
+    }
+  }
+
+  /**
+   * Gets whether snap-to-vertex and snap-to-edge are enabled for this IssuesMouseControl.
+   *
+   * This is `true` by default.
+   * @returns {*}
+   */
+  get snapping() {
+    return this._snapping;
+  }
+
+  /**
+   * Activates this IssuesMouseControl, ready to respond to input.
+   */
+  activate(done, isPoint) {
+    if (this._active) {
+      return;
+    }
+
+    if (!this._markerDiv) {
+      this._initMarkerDiv();
+    }
+
+    this.fire('issueCreated', true);
+
+    const plugin = this.plugin;
+    const scene = plugin.viewer.scene;
+    const cameraControl = plugin.viewer.cameraControl;
+    const canvas = scene.canvas.canvas;
+    scene.input;
+    const pointerWorldPos = math.vec3();
+    const pointerCanvasPos = math.vec2();
+    let pointerDownCanvasX;
+    let pointerDownCanvasY;
+    const clickTolerance = 20;
+    let hoveredEntity = null;
+
+    this._mouseState = 'MOUSE_FIRST_CLICK_EXPECTED';
+
+    const getTop = (el) =>
+      el.offsetTop +
+      (el.offsetParent &&
+        el.offsetParent !== canvas.parentNode &&
+        getTop(el.offsetParent));
+    const getLeft = (el) =>
+      el.offsetLeft +
+      (el.offsetParent &&
+        el.offsetParent !== canvas.parentNode &&
+        getLeft(el.offsetParent));
+
+    const pagePos = math.vec2();
+
+    this._onCameraControlHoverSnapOrSurface = cameraControl.on(
+      this._snapping ? 'hoverSnapOrSurface' : 'hoverSurface',
+      (event) => {
+        const canvasPos = event.snappedCanvasPos || event.canvasPos;
+        pointerWorldPos.set(event.worldPos);
+        pointerCanvasPos.set(event.canvasPos);
+        if (this._mouseState === 'MOUSE_FIRST_CLICK_EXPECTED') {
+          if (this._canvasToPagePos) {
+            this._canvasToPagePos(canvas, canvasPos, pagePos);
+            this._markerDiv.style.left = `${pagePos[0] - 5}px`;
+            this._markerDiv.style.top = `${pagePos[1] - 5}px`;
+          } else {
+            this._markerDiv.style.left = `${getLeft(canvas) + canvasPos[0] - 5}px`;
+            this._markerDiv.style.top = `${getTop(canvas) + canvasPos[1] - 5}px`;
+          }
+
+          this._markerDiv.style.background = 'pink';
+          if (event.snappedToVertex || event.snappedToEdge) {
+            if (this.pointerLens) {
+              this.pointerLens.visible = true;
+              this.pointerLens.canvasPos = event.canvasPos;
+              this.pointerLens.snappedCanvasPos =
+                event.snappedCanvasPos || event.canvasPos;
+              this.pointerLens.snapped = true;
+            }
+            this._markerDiv.style.background = 'greenyellow';
+            this._markerDiv.style.border = '2px solid green';
+          } else {
+            if (this.pointerLens) {
+              this.pointerLens.visible = true;
+              this.pointerLens.canvasPos = event.canvasPos;
+              this.pointerLens.snappedCanvasPos = event.canvasPos;
+              this.pointerLens.snapped = false;
+            }
+            this._markerDiv.style.background = 'pink';
+            this._markerDiv.style.border = '2px solid red';
+          }
+          hoveredEntity = event.entity;
+        } else {
+          this._markerDiv.style.left = `-10000px`;
+          this._markerDiv.style.top = `-10000px`;
+        }
+        canvas.style.cursor = 'pointer';
+        if (this._currentIssue) {
+          this._markerDiv.style.left = `-10000px`;
+          this._markerDiv.style.top = `-10000px`;
+        }
+      }
+    );
+
+    canvas.addEventListener(
+      'mousedown',
+      (this._onMouseDown = (e) => {
+        if (e.which !== 1) {
+          return;
+        }
+        pointerDownCanvasX = e.clientX;
+        pointerDownCanvasY = e.clientY;
+      })
+    );
+
+    canvas.addEventListener(
+      'mouseup',
+      (this._onMouseUp = (e) => {
+        if (!hoveredEntity) return;
+        if (e.which !== 1) {
+          return;
+        }
+        if (
+          e.clientX > pointerDownCanvasX + clickTolerance ||
+          e.clientX < pointerDownCanvasX - clickTolerance ||
+          e.clientY > pointerDownCanvasY + clickTolerance ||
+          e.clientY < pointerDownCanvasY - clickTolerance
+        ) {
+          return;
+        }
+        const idIs = math.createUUID();
+        this._currentIssue = plugin.createIssue({
+          id: idIs,
+          origin: {
+            worldPos: pointerWorldPos.slice(),
+            entity: hoveredEntity,
+          },
+          target: {
+            worldPos: pointerWorldPos.slice(),
+            entity: hoveredEntity,
+          },
+          approximate: true,
+          //themmoi2612
+          isPoint: isPoint,
+        });
+        this._currentIssue.clickable = false;
+        const id = hoveredEntity?.id;
+        const modelId = hoveredEntity?.model?.id;
+        hoveredEntity = null;
+
+        return done({
+          entityId: id,
+          pos: pointerWorldPos.slice(),
+          modelId: modelId,
+          draftId: idIs,
+        });
+      })
+    );
+
+    this._onCameraControlHoverSnapOrSurfaceOff = cameraControl.on(
+      this._snapping ? 'hoverSnapOrSurfaceOff' : 'hoverOff',
+      (event) => {
+        if (this.pointerLens) {
+          this.pointerLens.visible = true;
+          this.pointerLens.canvasPos = event.canvasPos;
+          this.pointerLens.snappedCanvasPos = event.snappedCanvasPos || event.canvasPos;
+        }
+        this._markerDiv.style.left = `-100px`;
+        this._markerDiv.style.top = `-100px`;
+        if (this._currentIssue) {
+          this._currentIssue.wireVisible = false;
+          this._currentIssue.targetVisible = false;
+          this._currentIssue.axisVisible = false;
+        }
+        canvas.style.cursor = 'default';
+      }
+    );
+
+    this._active = true;
+  }
+
+  /**
+   * Deactivates this IssuesMouseControl, making it unresponsive to input.
+   *
+   * Destroys any {@link DistanceMeasurement} under construction by this IssuesMouseControl.
+   */
+  deactivate() {
+    if (!this._active) {
+      return;
+    }
+
+    this.fire('activated', false);
+
+    if (this.pointerLens) {
+      this.pointerLens.visible = false;
+    }
+    if (this._markerDiv) {
+      this._destroyMarkerDiv();
+    }
+    this.reset();
+    const canvas = this.scene.canvas.canvas;
+    canvas.removeEventListener('mousedown', this._onMouseDown);
+    canvas.removeEventListener('mouseup', this._onMouseUp);
+    const cameraControl = this.IssuesPlugin.viewer.cameraControl;
+    cameraControl.off(this._onCameraControlHoverSnapOrSurface);
+    cameraControl.off(this._onCameraControlHoverSnapOrSurfaceOff);
+    if (this._currentDistanceMeasurement) {
+      this.IssuesPlugin.fire('measurementCancel', this._currentDistanceMeasurement);
+      this._currentDistanceMeasurement.destroy();
+      this._currentDistanceMeasurement = null;
+    }
+    this._active = false;
+  }
+
+  //themmoi37
+  //themmoi2612
+  loadIssue(data, isPoint) {
+    const entity = this.plugin.viewer.scene.objects[data.entityId];
+    this.plugin.loadIssue({
+      data: data,
+      entity: entity,
+      id: data.id,
+      color: data.color,
+      isZoom: data.isZoom,
+      isPoint: isPoint,
+    });
+  }
+
+  deleteIssue(id) {
+    this.plugin.deleteIssue(id);
+  }
+  clearIssue() {
+    this.plugin.destroy();
+  }
+  //endthemmoi37
+  /**
+   * Resets this IssuesMouseControl.
+   *
+   * Destroys any {@link DistanceMeasurement} under construction by this IssuesMouseControl.
+   *
+   * Does nothing if the IssuesMouseControl is not active.
+   */
+  reset() {
+    if (!this._active) {
+      return;
+    }
+
+    this._destroyMarkerDiv();
+    this._initMarkerDiv();
+
+    if (this._currentDistanceMeasurement) {
+      this.IssuesPlugin.fire('measurementCancel', this._currentDistanceMeasurement);
+      this._currentDistanceMeasurement.destroy();
+      this._currentDistanceMeasurement = null;
+    }
+
+    this._mouseState = MOUSE_FIRST_CLICK_EXPECTED;
+  }
+
+  /**
+   * Gets the {@link DistanceMeasurement} under construction by this IssuesMouseControl, if any.
+   *
+   * @returns {null|DistanceMeasurement}
+   */
+  get currentMeasurement() {
+    return this._currentDistanceMeasurement;
+  }
+
+  /**
+   * Destroys this IssuesMouseControl.
+   *
+   * Destroys any {@link DistanceMeasurement} under construction by this IssuesMouseControl.
+   */
+  destroy() {
+    this.deactivate();
+    super.destroy();
+  }
+}
+
+class Issues extends Component {
+    constructor(plugin, cfg = {}) {
+      super(plugin.viewer.scene, cfg);
+  
+      this.plugin = plugin;
+  
+      this._container = cfg.container;
+      if (!this._container) {
+        throw 'config missing: container';
+      }
+  
+      this._eventSubs = {};
+  
+      const scene = this.plugin.viewer.scene;
+      this._issueMarker = new Marker(scene, cfg.origin);
+  
+      this._issueWorld = math.vec3();
+  
+      this._isDragging = false;
+      this._dragOffset = { x: 0, y: 0 };
+  
+      this._wp = new Float64Array(12);
+      this._vp = new Float64Array(12);
+      this._pp = new Float64Array(12);
+      this._cp = new Float64Array(4);
+  
+      this._color = cfg.color || this.plugin.defaultColor;
+      this._triggerIssueState = cfg.triggerIssueState;
+  
+      const onMouseOver = cfg.onMouseOver
+        ? (event) => {
+            cfg.onMouseOver(event, this);
+            this.plugin.viewer.scene.canvas.canvas.dispatchEvent(
+              new MouseEvent('mouseover', event)
+            );
+          }
+        : null;
+  
+      const onMouseLeave = cfg.onMouseLeave
+        ? (event) => {
+            cfg.onMouseLeave(event, this);
+            this.plugin.viewer.scene.canvas.canvas.dispatchEvent(
+              new MouseEvent('mouseleave', event)
+            );
+          }
+        : null;
+  
+      const onMouseDown = (event) => {
+        //   event.preventDefault();
+        console.log('event nenenenen');
+        this._isDragging = true;
+        this._dragOffset.x = event.clientX - this._issueDot._x;
+        this._dragOffset.y = event.clientY - this._issueDot._y;
+        this.plugin.viewer.scene.canvas.canvas.dispatchEvent(
+          new MouseEvent('mousedown', event)
+        );
+      };
+  
+      const onMouseMove = (event) => {
+        if (this._isDragging) {
+          const x = event.clientX - this._dragOffset.x;
+          const y = event.clientY - this._dragOffset.y;
+          this._updateIssuePosition(x, y);
+        }
+        this.plugin.viewer.scene.canvas.canvas.dispatchEvent(
+          new MouseEvent('mousemove', event)
+        );
+      };
+  
+      const onMouseUp = (event) => {
+        this._isDragging = false;
+        this.plugin.viewer.scene.canvas.canvas.dispatchEvent(
+          new MouseEvent('mouseup', event)
+        );
+      };
+  
+      const onContextMenu = cfg.onContextMenu
+        ? (event) => {
+            cfg.onContextMenu(event, this);
+          }
+        : null;
+  
+      const onMouseWheel = (event) => {
+        this.plugin.viewer.scene.canvas.canvas.dispatchEvent(
+          new WheelEvent('wheel', event)
+        );
+      };
+  
+      const getId = () => {
+        this._triggerIssueState(cfg.id);
+      };
+  
+      this._issueDot = new Dot(this._container, {
+        fillColor: this._color,
+        zIndex: plugin.zIndex !== undefined ? plugin.zIndex + 2 : undefined,
+        onMouseOver,
+        onMouseLeave,
+        onMouseWheel,
+        onMouseDown,
+        onMouseUp,
+        onMouseMove,
+        onContextMenu,
+        getId,
+        visible: 'visible',
+        width: 18,
+        height: 18,
+        isIssue: true,
+        id: cfg.id,
+        //themmoi2012
+        origin: cfg?.origin.worldPos,
+        //themmoi2612
+        isPoint: cfg?.isPoint
+      });
+  
+      this._wpDirty = false;
+      this._vpDirty = false;
+      this._cpDirty = false;
+      this._sectionPlanesDirty = true;
+  
+      this._visible = false;
+      this._issueVisible = false;
+      this._clickable = false;
+  
+      this._issueMarker.on('worldPos', (value) => {
+        this._issueWorld.set(value || [0, 0, 0]);
+        this._wpDirty = true;
+        this._needUpdate(0);
+      });
+  
+      this._onViewMatrix = scene.camera.on('viewMatrix', () => {
+        this._vpDirty = true;
+        this._needUpdate(0);
+      });
+  
+      this._onProjMatrix = scene.camera.on('projMatrix', () => {
+        this._cpDirty = true;
+        this._needUpdate();
+      });
+  
+      this._onCanvasBoundary = scene.canvas.on('boundary', () => {
+        this._cpDirty = true;
+        this._needUpdate(0);
+      });
+  
+      this._onSectionPlaneUpdated = scene.on('sectionPlaneUpdated', () => {
+        this._sectionPlanesDirty = true;
+        this._needUpdate();
+      });
+  
+      this.visible = cfg.visible;
+      this.issueVisible = cfg.issueVisible;
+    }
+  
+    _updateIssuePosition(x, y) {
+      const scene = this.plugin.viewer.scene;
+      const camera = scene.camera;
+  
+      // Chuyển đổi từ tọa độ màn hình sang tọa độ chuẩn hóa
+      const canvas = scene.canvas.canvas;
+      const rect = canvas.getBoundingClientRect();
+      const normalizedX = ((x - rect.left) / canvas.clientWidth) * 2 - 1;
+      const normalizedY = -((y - rect.top) / canvas.clientHeight) * 2 + 1;
+  
+      // Tạo ray từ camera qua điểm trên màn hình
+      const ray = camera.getWorldRay(normalizedX, normalizedY);
+  
+      // Tính toán điểm giao của ray với mặt phẳng chứa issue cũ
+      const planeNormal = camera.worldForward;
+      const planePoint = this._issueWorld;
+      const intersection = math.intersectRayPlane(
+        ray.origin,
+        ray.direction,
+        planePoint,
+        planeNormal
+      );
+  
+      if (intersection) {
+        // Cập nhật vị trí mới cho issue
+        this._issueMarker.worldPos = intersection;
+        this._wpDirty = true;
+        this._needUpdate(0);
+      }
+    }
+  
+    _update() {
+      if (!this._visible) {
+        return;
+      }
+  
+      const scene = this.plugin.viewer.scene;
+  
+      if (this._wpDirty) {
+        this._wp[0] = this._issueWorld[0];
+        this._wp[1] = this._issueWorld[1];
+        this._wp[2] = this._issueWorld[2];
+        this._wp[3] = 1.0;
+  
+        this._wpDirty = false;
+        this._vpDirty = true;
+      }
+  
+      if (this._vpDirty) {
+        math.transformPositions4(scene.camera.viewMatrix, this._wp, this._vp);
+  
+        this._vp[3] = 1.0;
+  
+        this._vpDirty = false;
+        this._cpDirty = true;
+      }
+  
+      if (this._sectionPlanesDirty) {
+        if (this._isSliced(this._issueWorld)) {
+          this._issueDot.setCulled(true);
+          return;
+        } else {
+          this._issueDot.setCulled(false);
+        }
+  
+        this._sectionPlanesDirty = true;
+      }
+  
+      const near = -0.3;
+      const vpz = this._issueMarker.viewPos[2];
+  
+      if (vpz > near) {
+        this._issueDot.setVisible(false);
+        return;
+      }
+  
+      if (this._cpDirty) {
+        math.transformPositions4(scene.camera.project.matrix, this._vp, this._pp);
+  
+        const pp = this._pp;
+        const cp = this._cp;
+  
+        const canvas = scene.canvas.canvas;
+        const offsets = canvas.getBoundingClientRect();
+        const containerOffsets = this._container.getBoundingClientRect();
+        const top = offsets.top - containerOffsets.top;
+        const left = offsets.left - containerOffsets.left;
+        const aabb = scene.canvas.boundary;
+        const canvasWidth = aabb[2];
+        const canvasHeight = aabb[3];
+  
+        cp[0] = left + Math.floor(((1 + pp[0] / pp[3]) * canvasWidth) / 2);
+        cp[1] = top + Math.floor(((1 - pp[1] / pp[3]) * canvasHeight) / 2);
+  
+        this._issueDot.setPos(cp[0], cp[1]);
+  
+        this._issueDot._x = cp[0];
+        this._issueDot._y = cp[1];
+  
+        // this._issueDot.setVisible(this._visible && this._issueVisible);
+        this._issueDot.setVisible(true);
+        this._cpDirty = false;
+      }
+    }
+  
+    _isSliced(positions) {
+      const sectionPlanes = this.scene._sectionPlanesState.sectionPlanes;
+      for (let i = 0, len = sectionPlanes.length; i < len; i++) {
+        const sectionPlane = sectionPlanes[i];
+        if (math.planeClipsPositions3(sectionPlane.pos, sectionPlane.dir, positions, 4)) {
+          return true;
+        }
+      }
+      return false;
+    }
+  
+    get issueData() {
+      return this._issueMarker;
+    }
+  
+    get color() {
+      return this._color;
+    }
+  
+    set color(value) {
+      this._color = value;
+      this._issueDot.setFillColor(value);
+    }
+  
+    set visible(value) {
+      value = value !== undefined ? Boolean(value) : this.plugin.defaultVisible;
+  
+      this._visible = value;
+  
+      // this._issueDot.setVisible(this._visible && this._issueVisible);
+  
+      this._cpDirty = true;
+  
+      this._needUpdate();
+    }
+  
+    get visible() {
+      return this._visible;
+    }
+  
+    set issueVisible(value) {
+      value = value !== undefined ? Boolean(value) : this.plugin.defaultIssueVisible;
+      this._issueVisible = value;
+      // this._issueDot.setVisible(this._visible && this._issueVisible);
+    }
+  
+    get issueVisible() {
+      return this._issueVisible;
+    }
+  
+    setHighlighted(highlighted) {
+      this._issueDot.setHighlighted(highlighted);
+    }
+  
+    set clickable(value) {
+      value = !!value;
+      this._clickable = value;
+      this._issueDot.setClickable(this._clickable);
+    }
+  
+    get clickable() {
+      return this._clickable;
+    }
+  
+    destroy() {
+      const scene = this.plugin.viewer.scene;
+  
+      if (this._onViewMatrix) {
+        scene.camera.off(this._onViewMatrix);
+      }
+      if (this._onProjMatrix) {
+        scene.camera.off(this._onProjMatrix);
+      }
+      if (this._onCanvasBoundary) {
+        scene.canvas.off(this._onCanvasBoundary);
+      }
+      if (this._onSectionPlaneUpdated) {
+        scene.off(this._onSectionPlaneUpdated);
+      }
+  
+      this._issueDot.destroy();
+  
+      super.destroy();
+    }
+  }
+
+class IssuesPlugin extends Plugin {
+  constructor(viewer, cfg = {}) {
+    super('Issues', viewer);
+
+    this._pointerLens = cfg.pointerLens;
+
+    this._container = cfg.container || document.body;
+
+    this._defaultControl = null;
+
+    this._issues = {};
+
+    this.labelMinAxisLength = cfg.labelMinAxisLength;
+    this.defaultVisible = cfg.defaultVisible !== false;
+    this.defaultOriginVisible = cfg.defaultOriginVisible !== false;
+    this.defaultTargetVisible = cfg.defaultTargetVisible !== false;
+    this.defaultWireVisible = cfg.defaultWireVisible !== false;
+    this.defaultXLabelEnabled = cfg.defaultXLabelEnabled !== false;
+    this.defaultYLabelEnabled = cfg.defaultYLabelEnabled !== false;
+    this.defaultZLabelEnabled = cfg.defaultZLabelEnabled !== false;
+    this.defaultLengthLabelEnabled = cfg.defaultLengthLabelEnabled !== false;
+    this.defaultLabelsVisible = cfg.defaultLabelsVisible !== false;
+    this.defaultAxisVisible = cfg.defaultAxisVisible !== false;
+    this.defaultXAxisVisible = cfg.defaultXAxisVisible !== false;
+    this.defaultYAxisVisible = cfg.defaultYAxisVisible !== false;
+    this.defaultZAxisVisible = cfg.defaultZAxisVisible !== false;
+    this.defaultColor = cfg.defaultColor !== undefined ? cfg.defaultColor : '#00BBFF';
+    this.zIndex = cfg.zIndex || 10000;
+    this.defaultLabelsOnWires = cfg.defaultLabelsOnWires !== false;
+    this._triggerIssueState = cfg.bimview.triggerIssueState.bind(cfg.bimview);
+
+    this._onMouseOver = (event, issue) => {
+      this.fire('mouseOver', {
+        plugin: this,
+        issues: issue,
+        issue,
+        event,
+      });
+    };
+
+    this._onMouseLeave = (event, issue) => {
+      this.fire('mouseLeave', {
+        plugin: this,
+        issues: issue,
+        issue,
+        event,
+      });
+    };
+
+    this._onContextMenu = (event, issue) => {
+      this.fire('contextMenu', {
+        plugin: this,
+        issues: issue,
+        issue,
+        event,
+      });
+    };
+  }
+
+  /**
+   * Gets the plugin's HTML container element, if any.
+   * @returns {*|HTMLElement|HTMLElement}
+   */
+  getContainerElement() {
+    return this._container;
+  }
+
+  /**
+   * @private
+   */
+  send(name, value) { }
+
+  /**
+   * Gets the PointerLens attached to this IssuesPlugin.
+   * @returns {PointerCircle}
+   */
+  get pointerLens() {
+    return this._pointerLens;
+  }
+
+  /**
+   * Gets the default {@link IssuesControl}.
+   *
+   * @type {IssuesControl}
+   * @deprecated
+   */
+  get control() {
+    if (!this._defaultControl) {
+      this._defaultControl = new IssuesControl(this, {});
+    }
+    return this._defaultControl;
+  }
+
+  /**
+   * Gets the existing {@link Issues}s, each mapped to its {@link Issues#id}.
+   *
+   * @type {{String:Issues}}
+   */
+  get issues() {
+    return this._issues;
+  }
+
+  /**
+   * Sets the minimum length, in pixels, of an axis wire beyond which its label is shown.
+   *
+   * The axis wire's label is not shown when its length is less than this value.
+   *
+   * This is ````25```` pixels by default.
+   *
+   * Must not be less than ````1````.
+   *
+   * @type {number}
+   */
+  set labelMinAxisLength(labelMinAxisLength) {
+    if (labelMinAxisLength < 1) {
+      this.error('labelMinAxisLength must be >= 1; defaulting to 25');
+      labelMinAxisLength = 25;
+    }
+    this._labelMinAxisLength = labelMinAxisLength || 25;
+  }
+
+  /**
+   * Gets the minimum length, in pixels, of an axis wire beyond which its label is shown.
+   * @returns {number}
+   */
+  get labelMinAxisLength() {
+    return this._labelMinAxisLength;
+  }
+
+  createIssue(params = {}) {
+    if (this._issues[params.id]) {
+      const IssueMarker = new Marker(this.viewer.scene, params.origin);
+      const IssueWorld = math.vec3();
+      IssueMarker.on('worldPos', (value) => {
+        IssueWorld.set(value || [0, 0, 0]);
+      });
+      const offset = [10, 10, 10];
+      const eyePos = [
+        IssueWorld[0] + offset[0],
+        IssueWorld[1] + offset[1],
+        IssueWorld[2] + offset[2],
+      ];
+      this.viewer.camera.look = IssueWorld;
+      this.viewer.camera.eye = eyePos;
+      return;
+    }
+
+    const origin = params.origin;
+    const target = params.target;
+    const issue = new Issues(this, {
+      id: params.id,
+      container: this._container, // Chứa canvas hoặc container chứa
+      color: params.color || '#FF0000', // màu mặc định nếu không có
+      onMouseOver: params.onMouseOver,
+      onMouseLeave: params.onMouseLeave,
+      onContextMenu: params.onContextMenu,
+      visible: params.visible,
+      issueVisible: params.issueVisible,
+      origin: {
+        entity: origin.entity,
+        worldPos: origin.worldPos,
+      },
+      target: {
+        entity: target.entity,
+        worldPos: target.worldPos,
+      },
+      triggerIssueState: this._triggerIssueState,
+      //themmoi2612
+      isPoint: params.isPoint,
+    });
+
+    if (params.isZoom) {
+      const offset = [10, 10, 10];
+      const eyePos = [
+        issue._issueWorld[0] + offset[0],
+        issue._issueWorld[1] + offset[1],
+        issue._issueWorld[2] + offset[2],
+      ];
+      this.viewer.camera.look = issue._issueWorld;
+      this.viewer.camera.eye = eyePos;
+    }
+
+    this._issues[params.id] = issue;
+
+    this.fire('issueCreated', issue);
+
+    return issue;
+  }
+
+  loadIssue(value) {
+    // const origin = value.data;
+    // const target = value.data;
+    const origin = {
+      worldPos: value.data.data,
+      entity: value.entity,
+    };
+    const target = {
+      worldPos: value.data.data,
+      entity: value.entity,
+    };
+    this.createIssue({
+      origin: origin,
+      target: target,
+      id: value.id,
+      color: value.color,
+      isZoom: value.isZoom,
+      //themmoi2612
+      isPoint: value.isPoint,
+    });
+  }
+
+  deleteIssue(id) {
+    const issue = this._issues[id];
+    if (!issue) {
+      this.log('Issue not found: ' + id);
+      return;
+    }
+    issue.destroy();
+    delete this._issues[id];
+    this.fire('issueDestroyed', issue);
+  }
+
+  /**
+   * Destroys a {@link Issues}.
+   *
+   * @param {String} id ID of Issues to destroy.
+   */
+  destroyIssue(id) {
+    const issue = this._issues[id];
+    if (!issue) {
+      this.log('Issues not found: ' + id);
+      return;
+    }
+    issue.destroy();
+    this.fire('issueDestroyed', issue);
+  }
+
+  /**
+   * Shows all or hides the distance label of each {@link Issues}.
+   *
+   * @param {Boolean} labelsShown Whether or not to show the labels.
+   */
+  setLabelsShown(labelsShown) {
+    for (const [key, issue] of Object.entries(this.measurements)) {
+      issue.labelShown = labelsShown;
+    }
+  }
+
+  /**
+   * Shows all or hides the axis wires of each {@link Issues}.
+   *
+   * @param {Boolean} labelsShown Whether or not to show the axis wires.
+   */
+  setAxisVisible(axisVisible) {
+    for (const [key, issue] of Object.entries(this.measurements)) {
+      issue.axisVisible = axisVisible;
+    }
+    this.defaultAxisVisible = axisVisible;
+  }
+
+  /**
+   * Gets if the axis wires of each {@link Issues} are visible.
+   *
+   * @returns {Boolean} Whether or not the axis wires are visible.
+   */
+  getAxisVisible() {
+    return this.defaultAxisVisible;
+  }
+
+  /**
+   * Destroys all {@link Issues}s.
+   */
+  clear() {
+    const ids = Object.keys(this._issues);
+    for (var i = 0, len = ids.length; i < len; i++) {
+      this.deleteIssue(ids[i]);
+    }
+  }
+
+  /**
+   * Destroys this IssuesPlugin.
+   *
+   * Destroys all {@link Issues}s first.
+   */
+  destroy() {
+    this.clear();
+    super.destroy();
+  }
+}
+
+const WAITING_FOR_ORIGIN_TOUCH_START = 0;
+const WAITING_FOR_ORIGIN_QUICK_TOUCH_END = 1;
+const WAITING_FOR_ORIGIN_LONG_TOUCH_END = 2;
+
+const WAITING_FOR_TARGET_TOUCH_START = 3;
+const WAITING_FOR_TARGET_QUICK_TOUCH_END = 4;
+const WAITING_FOR_TARGET_LONG_TOUCH_END = 5;
+
+const TOUCH_CANCELING = 7;
+
+class IssuesTouchControl extends IssuesControl {
+
+    constructor(issuesPlugin, cfg = {}) {
+
+        super(issuesPlugin.viewer.scene);
+
+        this.pointerLens = cfg.pointerLens;
+        this.pointerCircle = new PointerCircle(issuesPlugin.viewer);
+
+        this._active = false;
+
+        const markerDiv = document.createElement('div');
+        const canvas = this.scene.canvas.canvas;
+        canvas.parentNode.insertBefore(markerDiv, canvas);
+
+        markerDiv.style.background = "black";
+        markerDiv.style.border = "2px solid blue";
+        markerDiv.style.borderRadius = "10px";
+        markerDiv.style.width = "5px";
+        markerDiv.style.height = "5px";
+        markerDiv.style.margin = "-200px -200px";
+        markerDiv.style.zIndex = "100";
+        markerDiv.style.position = "absolute";
+        markerDiv.style.pointerEvents = "none";
+
+        this.markerDiv = markerDiv;
+
+        this._currentDistanceMeasurement = null;
+
+        this._currentDistanceMeasurementInitState = {
+            wireVisible: null,
+            axisVisible: null,
+            xAxisVisible: null,
+            yaxisVisible: null,
+            zAxisVisible: null,
+            targetVisible: null,
+        };
+
+        this._onCanvasTouchStart = null;
+        this._onCanvasTouchEnd = null;
+        this._longTouchTimeoutMs = 300;
+        this._snapping = cfg.snapping !== false;
+        this._touchState = WAITING_FOR_ORIGIN_TOUCH_START;
+
+        this._attachPlugin(issuesPlugin, cfg);
+    }
+
+    _attachPlugin(issuesPlugin) {
+
+        /**
+         * The {@link DistanceMeasurementsPlugin} that owns this IssuesTouchControl.
+         * @type {DistanceMeasurementsPlugin}
+         */
+        this.issuesPlugin = issuesPlugin;
+
+        /**
+         * The {@link DistanceMeasurementsPlugin} that owns this IssuesTouchControl.
+         * @type {DistanceMeasurementsPlugin}
+         */
+        this.plugin = issuesPlugin;
+    }
+
+    /** Gets if this IssuesTouchControl is currently active, where it is responding to input.
+     *
+     * @returns {Boolean}
+     */
+    get active() {
+        return this._active;
+    }
+    set snapping(snapping) {
+        if (snapping !== this._snapping) {
+            this._snapping = snapping;
+            this.deactivate();
+            this.activate();
+        } else {
+            this._snapping = snapping;
+        }
+    }
+
+    /**
+     * Gets whether snap-to-vertex and snap-to-edge are enabled for this IssuesTouchControl.
+     *
+     * This is `true` by default.
+     *
+     * @returns {boolean} Whether snap-to-vertex and snap-to-edge are enabled for this IssuesTouchControl.
+     */
+    get snapping() {
+        return this._snapping;
+    }
+
+    /**
+     * Activates this IssuesTouchControl, ready to respond to input.
+     */
+    activate() {
+
+        if (this._active) {
+            return;
+        }
+
+        const plugin = this.plugin;
+        const scene = this.scene;
+        const canvas = scene.canvas.canvas;
+        plugin.pointerLens;
+        const pointerWorldPos = math.vec3();
+
+        const touchTolerance = 20;
+
+        let longTouchTimeout = null;
+
+        this._touchState = WAITING_FOR_ORIGIN_TOUCH_START;
+
+        const touchStartCanvasPos = math.vec2();
+        const touchMoveCanvasPos = math.vec2();
+        const touchEndCanvasPos = math.vec2();
+
+        let touchId = null;
+
+        const disableCameraNavigation = () => {
+            this.plugin.viewer.cameraControl.active = false;
+        };
+
+        const enableCameraNavigation = () => {
+            this.plugin.viewer.cameraControl.active = true;
+        };
+
+        const cancel = () => {
+            if (longTouchTimeout) {
+                clearTimeout(longTouchTimeout);
+                longTouchTimeout = null;
+            }
+            if (this._currentDistanceMeasurement) {
+                this._currentDistanceMeasurement.destroy();
+                this._currentDistanceMeasurement = null;
+            }
+            enableCameraNavigation();
+            this._touchState = WAITING_FOR_ORIGIN_TOUCH_START;
+        };
+
+        canvas.addEventListener("touchstart", this._onCanvasTouchStart = (event) => {
+
+            const currentNumTouches = event.touches.length;
+
+            if (currentNumTouches !== 1) {
+                if (longTouchTimeout) {
+                    clearTimeout(longTouchTimeout);
+                    longTouchTimeout = null;
+                }
+                return;
+            }
+
+            const touch = event.touches[0];
+            const touchX = touch.clientX;
+            const touchY = touch.clientY;
+
+            touchStartCanvasPos.set([touchX, touchY]);
+            touchMoveCanvasPos.set([touchX, touchY]);
+
+            switch (this._touchState) {
+
+                case WAITING_FOR_ORIGIN_TOUCH_START:
+                    if (currentNumTouches !== 1 && longTouchTimeout !== null) { // Two or more fingers down
+                        cancel();
+                        return;
+                    }
+                    const snapPickResult = scene.pick({
+                        canvasPos: touchMoveCanvasPos,
+                        snapping: this._snapping,
+                        snapToEdge: this._snapping
+                    });
+                    if (snapPickResult && snapPickResult.snapped) {
+                        pointerWorldPos.set(snapPickResult.worldPos);
+                        this.pointerCircle.start(snapPickResult.snappedCanvasPos);
+                    } else {
+                        const pickResult = scene.pick({
+                            canvasPos: touchMoveCanvasPos,
+                            pickSurface: true
+                        });
+                        if (pickResult && pickResult.worldPos) {
+                            pointerWorldPos.set(pickResult.worldPos);
+                            this.pointerCircle.start(pickResult.canvasPos);
+                        } else {
+                            return;
+                        }
+                    }
+                    longTouchTimeout = setTimeout(() => {
+                        if (currentNumTouches !== 1 ||
+                            touchMoveCanvasPos[0] > touchStartCanvasPos[0] + touchTolerance ||
+                            touchMoveCanvasPos[0] < touchStartCanvasPos[0] - touchTolerance ||
+                            touchMoveCanvasPos[1] > touchStartCanvasPos[1] + touchTolerance ||
+                            touchMoveCanvasPos[1] < touchStartCanvasPos[1] - touchTolerance) {
+                            return;   // Has moved
+                        }
+                        // Long touch
+                        if (this.pointerLens) {
+                            this.pointerLens.visible = true;
+                            this.pointerLens.canvasPos = touchStartCanvasPos;
+                            this.pointerLens.cursorPos = touchStartCanvasPos;
+                        }
+                        if (this.pointerLens) {
+                            this.pointerLens.canvasPos = touchMoveCanvasPos;
+                            this.pointerLens.snapped = false;
+                        }
+                        if (this.pointerLens) {
+                            this.pointerLens.cursorPos = snapPickResult.canvasPos;
+                            this.pointerLens.snapped = true;
+                        }
+                        // pointerWorldPos.set(snapPickResult.snappedWorldPos);
+                        if (!this._currentDistanceMeasurement) {
+                            this._currentDistanceMeasurement = plugin.createMeasurement({
+                                id: math.createUUID(),
+                                origin: {
+                                    worldPos: pointerWorldPos,
+                                    entity: snapPickResult.entity
+                                },
+                                target: {
+                                    worldPos: pointerWorldPos,
+                                    entity: snapPickResult.entity
+                                }
+                            });
+                            this._currentDistanceMeasurement.labelsVisible = false;
+                            this._currentDistanceMeasurement.xAxisVisible = false;
+                            this._currentDistanceMeasurement.yAxisVisible = false;
+                            this._currentDistanceMeasurement.zAxisVisible = false;
+                            this._currentDistanceMeasurement.wireVisible = false;
+                            this._currentDistanceMeasurement.originVisible = true;
+                            this._currentDistanceMeasurement.targetVisible = false;
+                            this._currentDistanceMeasurement.clickable = false;
+                        } else {
+                            this._currentDistanceMeasurement.origin.worldPos = pointerWorldPos;
+                        }
+                        this.issuesPlugin.fire("measurementStart", this._currentDistanceMeasurement);
+
+                        this._touchState = WAITING_FOR_ORIGIN_LONG_TOUCH_END;
+                        disableCameraNavigation();
+                    }, this._longTouchTimeoutMs);
+                    this._touchState = WAITING_FOR_ORIGIN_QUICK_TOUCH_END;
+
+                    touchId = touch.identifier;
+
+                    break;
+
+
+                case WAITING_FOR_TARGET_TOUCH_START:
+
+                    if (currentNumTouches !== 1 && longTouchTimeout !== null) { // Two or more fingers down
+                        clearTimeout(longTouchTimeout);
+                        longTouchTimeout = null;
+                        return;
+                    }
+                    if (currentNumTouches === 1) { // One finger down
+                        longTouchTimeout = setTimeout(() => {
+                            longTouchTimeout = null;
+                            if (currentNumTouches !== 1 ||
+                                touchMoveCanvasPos[0] > touchStartCanvasPos[0] + touchTolerance ||
+                                touchMoveCanvasPos[0] < touchStartCanvasPos[0] - touchTolerance ||
+                                touchMoveCanvasPos[1] > touchStartCanvasPos[1] + touchTolerance ||
+                                touchMoveCanvasPos[1] < touchStartCanvasPos[1] - touchTolerance) {
+                                // Has moved
+                                return;
+                            }
+
+                            // Long touch
+                            if (this.pointerLens) {
+                                this.pointerLens.visible = true;
+                                this.pointerLens.canvasPos = touchStartCanvasPos;
+                                this.pointerLens.snapped = false;
+                            }
+
+                            const snapPickResult = scene.pick({
+                                canvasPos: touchMoveCanvasPos,
+                                snapToVertex: this._snapping,
+                                snapToEdge: this._snapping
+                            });
+                            if (snapPickResult && snapPickResult.snapped) {
+                                if (this.pointerLens) {
+                                    this.pointerLens.cursorPos = snapPickResult.snappedCanvasPos;
+                                    this.pointerLens.snapped = true;
+                                }
+                                this.pointerCircle.start(snapPickResult.snappedCanvasPos);
+                                pointerWorldPos.set(snapPickResult.worldPos);
+                                this._currentDistanceMeasurement.target.worldPos = snapPickResult.worldPos;
+                                this._currentDistanceMeasurement.target.entity = snapPickResult.entity;
+                                this._currentDistanceMeasurement.targetVisible = true;
+                                this._currentDistanceMeasurement.wireVisible = true;
+                                this._currentDistanceMeasurement.labelsVisible = true;
+                                this.issuesPlugin.fire("measurementStart", this._currentDistanceMeasurement);
+                            } else {
+                                const pickResult = scene.pick({
+                                    canvasPos: touchMoveCanvasPos,
+                                    pickSurface: true
+                                });
+                                if (pickResult && pickResult.worldPos) {
+                                    if (this.pointerLens) {
+                                        this.pointerLens.cursorPos = pickResult.canvasPos;
+                                        this.pointerLens.snapped = false;
+                                    }
+                                    this.pointerCircle.start(pickResult.canvasPos);
+                                    pointerWorldPos.set(pickResult.worldPos);
+                                    this._currentDistanceMeasurement.target.worldPos = pickResult.worldPos;
+                                    this._currentDistanceMeasurement.target.entity = pickResult.entity;
+                                    this._currentDistanceMeasurement.targetVisible = true;
+                                    this._currentDistanceMeasurement.wireVisible = true;
+                                    this._currentDistanceMeasurement.labelsVisible = true;
+                                    this.issuesPlugin.fire("measurementStart", this._currentDistanceMeasurement);
+                                } else {
+                                    if (this.pointerLens) {
+                                        this.pointerLens.cursorPos = null;
+                                        this.pointerLens.snapped = false;
+
+                                    }
+                                }
+                            }
+                            this._touchState = WAITING_FOR_TARGET_LONG_TOUCH_END;
+                            // console.log("touchstart: this._touchState= WAITING_FOR_TARGET_TOUCH_START -> WAITING_FOR_TARGET_LONG_TOUCH_END")
+
+                            disableCameraNavigation();
+
+                        }, this._longTouchTimeoutMs);
+
+                        this._touchState = WAITING_FOR_TARGET_QUICK_TOUCH_END;
+                        // console.log("touchstart: this._touchState= WAITING_FOR_TARGET_TOUCH_START -> WAITING_FOR_TARGET_QUICK_TOUCH_END")
+                    }
+
+                    touchId = touch.identifier;
+
+                    break;
+
+                default:
+                    if (longTouchTimeout !== null) {
+                        clearTimeout(longTouchTimeout);
+                        longTouchTimeout = null;
+                    }
+                    this._touchState = TOUCH_CANCELING;
+                    // console.log("touchstart: this._touchState= default -> TOUCH_CANCELING")
+                    return;
+            }
+
+        }, {passive: true});
+
+
+        canvas.addEventListener("touchmove", (event) => {
+
+            this.pointerCircle.stop();
+
+            const currentNumTouches = event.touches.length;
+
+            if (currentNumTouches !== 1 || event.changedTouches.length !== 1) {
+                if (longTouchTimeout) {
+                    clearTimeout(longTouchTimeout);
+                    longTouchTimeout = null;
+                }
+                return;
+            }
+
+            const touch = event.touches[0];
+            const touchX = touch.clientX;
+            const touchY = touch.clientY;
+
+            if (touch.identifier !== touchId) {
+                return;
+            }
+
+            touchMoveCanvasPos.set([touchX, touchY]);
+
+            let snapPickResult;
+            let pickResult;
+
+            switch (this._touchState) {
+
+                case WAITING_FOR_ORIGIN_LONG_TOUCH_END:
+                    if (this.pointerLens) {
+                        this.pointerLens.canvasPos = touchMoveCanvasPos;
+                    }
+                    snapPickResult = scene.pick({
+                        canvasPos: touchMoveCanvasPos,
+                        snapToVertex: this._snapping,
+                        snapToEdge: this._snapping
+                    });
+                    if (snapPickResult && (snapPickResult.snapped)) {
+                        if (this.pointerLens) {
+                            this.pointerLens.snappedCanvasPos = snapPickResult.snappedCanvasPos;
+                            this.pointerLens.snapped = true;
+                        }
+                        pointerWorldPos.set(snapPickResult.worldPos);
+                        if (!this._currentDistanceMeasurement) {
+                            this._currentDistanceMeasurement = plugin.createMeasurement({
+                                id: math.createUUID(),
+                                origin: {
+                                    worldPos: snapPickResult.worldPos,
+                                    entity: snapPickResult.entity
+                                },
+                                target: {
+                                    worldPos: snapPickResult.worldPos,
+                                    entity: snapPickResult.entity
+                                }
+                            });
+                            this._currentDistanceMeasurement.labelsVisible = false;
+                            this._currentDistanceMeasurement.xAxisVisible = false;
+                            this._currentDistanceMeasurement.yAxisVisible = false;
+                            this._currentDistanceMeasurement.zAxisVisible = false;
+                            this._currentDistanceMeasurement.wireVisible = false;
+                            this._currentDistanceMeasurement.originVisible = true;
+                            this._currentDistanceMeasurement.targetVisible = false;
+                            this._currentDistanceMeasurement.clickable = false;
+                        } else {
+                            this._currentDistanceMeasurement.origin.worldPos = snapPickResult.worldPos;
+                        }
+
+                        this.issuesPlugin.fire("measurementStart", this._currentDistanceMeasurement);
+                    } else {
+                        pickResult = scene.pick({
+                            canvasPos: touchMoveCanvasPos,
+                            pickSurface: true
+                        });
+                        if (pickResult && pickResult.worldPos) {
+                            if (this.pointerLens) {
+                                this.pointerLens.cursorPos = pickResult.canvasPos;
+                                this.pointerLens.snapped = false;
+                            }
+                            pointerWorldPos.set(pickResult.worldPos);
+                            if (!this._currentDistanceMeasurement) {
+                                this._currentDistanceMeasurement = plugin.createMeasurement({
+                                    id: math.createUUID(),
+                                    origin: {
+                                        worldPos: pickResult.worldPos,
+                                        entity: pickResult.entity
+                                    },
+                                    target: {
+                                        worldPos: pickResult.worldPos,
+                                        entity: pickResult.entity
+                                    }
+                                });
+                                this._currentDistanceMeasurement.labelsVisible = false;
+                                this._currentDistanceMeasurement.xAxisVisible = false;
+                                this._currentDistanceMeasurement.yAxisVisible = false;
+                                this._currentDistanceMeasurement.zAxisVisible = false;
+                                this._currentDistanceMeasurement.wireVisible = false;
+                                this._currentDistanceMeasurement.originVisible = true;
+                                this._currentDistanceMeasurement.targetVisible = false;
+                                this._currentDistanceMeasurement.clickable = false;
+                            } else {
+                                this._currentDistanceMeasurement.origin.worldPos = pickResult.worldPos;
+                            }
+
+                            this.issuesPlugin.fire("measurementStart", this._currentDistanceMeasurement);
+                        } else {
+                            if (this.pointerLens) {
+                                this.pointerLens.cursorPos = null;
+                                this.pointerLens.snapped = false;
+                            }
+                        }
+                    }
+                    this._touchState = WAITING_FOR_ORIGIN_LONG_TOUCH_END;
+                    // console.log("touchmove: this._touchState= WAITING_FOR_ORIGIN_LONG_TOUCH_END -> WAITING_FOR_ORIGIN_LONG_TOUCH_END")
+                    break;
+
+                // case WAITING_FOR_TARGET_TOUCH_START:
+                //     this._touchState = WAITING_FOR_TARGET_TOUCH_START;
+                //     console.log("touchmove: this._touchState= WAITING_FOR_TARGET_TOUCH_START -> WAITING_FOR_TARGET_TOUCH_START")
+                //     break;
+
+                case WAITING_FOR_TARGET_LONG_TOUCH_END:
+                    if (currentNumTouches !== 1 && longTouchTimeout !== null) { // Two or more fingers down
+                        clearTimeout(longTouchTimeout);
+                        longTouchTimeout = null;
+                        if (this.pointerLens) {
+                            this.pointerLens.visible = false;
+                        }
+                        this._touchState = TOUCH_CANCELING;
+                        // console.log("touchmove: this._touchState= QUICK_TOUCH_FINDING_TARGET -> TOUCH_CANCELING")
+                        return;
+                    }
+                    if (this.pointerLens) {
+                        this.pointerLens.canvasPos = touchMoveCanvasPos;
+                    }
+                    snapPickResult = scene.pick({
+                        canvasPos: touchMoveCanvasPos,
+                        snapToVertex: this._snapping,
+                        snapToEdge: this._snapping
+                    });
+                    if (snapPickResult && snapPickResult.worldPos) {
+                        if (this.pointerLens) {
+                            this.pointerLens.cursorPos = snapPickResult.snappedCanvasPos;
+                            this.pointerLens.snapped = true;
+                        }
+                        this._currentDistanceMeasurement.target.worldPos = snapPickResult.worldPos;
+                        this._currentDistanceMeasurement.target.entity = snapPickResult.entity;
+                        this._currentDistanceMeasurement.targetVisible = true;
+                        this._currentDistanceMeasurement.wireVisible = true;
+                        this._currentDistanceMeasurement.labelsVisible = true;
+                    } else {
+                        pickResult = scene.pick({
+                            canvasPos: touchMoveCanvasPos,
+                            pickSurface: true
+                        });
+                        if (pickResult && pickResult.worldPos) {
+                            if (this.pointerLens) {
+                                this.pointerLens.cursorPos = pickResult.canvasPos;
+                                this.pointerLens.snapped = false;
+                            }
+                            this._currentDistanceMeasurement.target.worldPos = pickResult.worldPos;
+                            this._currentDistanceMeasurement.target.entity = pickResult.entity;
+                            this._currentDistanceMeasurement.targetVisible = true;
+                            this._currentDistanceMeasurement.wireVisible = true;
+                            this._currentDistanceMeasurement.labelsVisible = true;
+
+                        }
+                    }
+                    this._touchState = WAITING_FOR_TARGET_LONG_TOUCH_END;
+                    break;
+            }
+        }, {passive: true});
+
+        canvas.addEventListener("touchend", this._onCanvasTouchEnd = (event) => {
+
+            this.pointerCircle.stop();
+
+            const numChangedTouches = event.changedTouches.length;
+
+            if (numChangedTouches !== 1) {
+                return;
+            }
+
+            const touch = event.changedTouches[0];
+            const touchX = touch.clientX;
+            const touchY = touch.clientY;
+
+            if (touch.identifier !== touchId) {
+                return;
+            }
+
+            if (longTouchTimeout) {
+                clearTimeout(longTouchTimeout);
+                longTouchTimeout = null;
+            }
+
+            touchEndCanvasPos.set([touchX, touchY]);
+
+            switch (this._touchState) {
+
+                case WAITING_FOR_ORIGIN_QUICK_TOUCH_END: {
+                    if (numChangedTouches !== 1 ||
+                        touchX > touchStartCanvasPos[0] + touchTolerance ||
+                        touchX < touchStartCanvasPos[0] - touchTolerance ||
+                        touchY > touchStartCanvasPos[1] + touchTolerance ||
+                        touchY < touchStartCanvasPos[1] - touchTolerance) {
+                        this._touchState = WAITING_FOR_ORIGIN_TOUCH_START;
+                        return;
+                    }
+                    const pickResult = scene.pick({
+                        canvasPos: touchMoveCanvasPos,
+                        pickSurface: true
+                    });
+                    if (pickResult && pickResult.worldPos) {
+                        this._currentDistanceMeasurement = plugin.createMeasurement({
+                            id: math.createUUID(),
+                            origin: {
+                                worldPos: pickResult.worldPos,
+                                entity: pickResult.entity
+                            },
+                            target: {
+                                worldPos: pickResult.worldPos,
+                                entity: pickResult.entity
+                            }
+                        });
+                        this._currentDistanceMeasurement.labelsVisible = false;
+                        this._currentDistanceMeasurement.xAxisVisible = false;
+                        this._currentDistanceMeasurement.yAxisVisible = false;
+                        this._currentDistanceMeasurement.zAxisVisible = false;
+                        this._currentDistanceMeasurement.wireVisible = false;
+                        this._currentDistanceMeasurement.originVisible = true;
+                        this._currentDistanceMeasurement.targetVisible = false;
+                        this._currentDistanceMeasurement.clickable = false;
+                        this._touchState = WAITING_FOR_TARGET_TOUCH_START;
+                        this.issuesPlugin.fire("measurementStart", this._currentDistanceMeasurement);
+                        //  console.log("touchend: this._touchState= WAITING_FOR_ORIGIN_QUICK_TOUCH_END -> WAITING_FOR_ORIGIN_TOUCH_START")
+                    } else {
+                        if (this._currentDistanceMeasurement) {
+                            this._currentDistanceMeasurement.destroy();
+                        }
+                        this._touchState = WAITING_FOR_ORIGIN_TOUCH_START;
+                        //  console.log("touchend: this._touchState= WAITING_FOR_ORIGIN_QUICK_TOUCH_END -> WAITING_FOR_ORIGIN_TOUCH_START")
+                    }
+                }
+                    enableCameraNavigation();
+                    break;
+
+                case WAITING_FOR_ORIGIN_LONG_TOUCH_END:
+                    if (this.pointerLens) {
+                        this.pointerLens.visible = false;
+                    }
+                    if (!this._currentDistanceMeasurement) {
+                        if (this.pointerLens) {
+                            this.pointerLens.snapped = false;
+                            this.pointerLens.visible = false;
+                        }
+                        this._touchState = WAITING_FOR_ORIGIN_TOUCH_START;
+                        //  console.log("touchend: this._touchState= WAITING_FOR_ORIGIN_LONG_TOUCH_END (no measurement) -> WAITING_FOR_ORIGIN_TOUCH_START")
+                    } else {
+                        this._touchState = WAITING_FOR_TARGET_TOUCH_START;
+                        //  console.log("touchend: this._touchState= WAITING_FOR_ORIGIN_LONG_TOUCH_END (picked, begin measurement) -> WAITING_FOR_TARGET_TOUCH_START")
+                    }
+                    enableCameraNavigation();
+                    break;
+
+                case WAITING_FOR_TARGET_QUICK_TOUCH_END: {
+                    if (numChangedTouches !== 1 ||
+                        touchX > touchStartCanvasPos[0] + touchTolerance ||
+                        touchX < touchStartCanvasPos[0] - touchTolerance ||
+                        touchY > touchStartCanvasPos[1] + touchTolerance ||
+                        touchY < touchStartCanvasPos[1] - touchTolerance) {
+                        this._touchState = WAITING_FOR_TARGET_TOUCH_START;
+                        return;
+                    }
+                    const pickResult = scene.pick({
+                        canvasPos: touchMoveCanvasPos,
+                        pickSurface: true
+                    });
+                    if (pickResult && pickResult.worldPos) {
+                        this._currentDistanceMeasurement.target.worldPos = pickResult.worldPos;
+                        this._currentDistanceMeasurement.target.entity = pickResult.entity;
+                        this._currentDistanceMeasurement.targetVisible = true;
+                        this._currentDistanceMeasurement.wireVisible = true;
+                        this._currentDistanceMeasurement.labelsVisible = true;
+                        this._currentDistanceMeasurement.xAxisVisible = true;
+                        this._currentDistanceMeasurement.yAxisVisible = true;
+                        this._currentDistanceMeasurement.zAxisVisible = true;
+                        this._currentDistanceMeasurement.clickable = true;
+                        this.issuesPlugin.fire("measurementEnd", this._currentDistanceMeasurement);
+                        this._currentDistanceMeasurement = null;
+                    } else {
+                        if (this._currentDistanceMeasurement) {
+                            this._currentDistanceMeasurement.destroy();
+                            this._currentDistanceMeasurement = null;
+                        }
+                    }
+                    this._touchState = WAITING_FOR_ORIGIN_TOUCH_START;
+                    //  console.log("touchend: this._touchState= WAITING_FOR_TARGET_TOUCH_START -> WAITING_FOR_ORIGIN_TOUCH_START")
+                }
+                    enableCameraNavigation();
+                    break;
+
+                case WAITING_FOR_TARGET_LONG_TOUCH_END:
+                    console.log('long touch');
+                    if (this.pointerLens) {
+                        this.pointerLens.visible = false;
+                    }
+                    if (!this._currentDistanceMeasurement || !this._currentDistanceMeasurement.targetVisible) {
+                        if (this._currentDistanceMeasurement) {
+                            this._currentDistanceMeasurement.destroy();
+                            this._currentDistanceMeasurement = null;
+                        }
+                        this._touchState = WAITING_FOR_ORIGIN_TOUCH_START;
+                        //  console.log("touchend: this._touchState= WAITING_FOR_TARGET_LONG_TOUCH_END (no target found) -> WAITING_FOR_ORIGIN_TOUCH_START")
+                    } else {
+                        this._currentDistanceMeasurement.clickable = true;
+                        this.issuesPlugin.fire("measurementEnd", this._currentDistanceMeasurement);
+                        this._currentDistanceMeasurement = null;
+                        this._touchState = WAITING_FOR_ORIGIN_TOUCH_START;
+                        //  console.log("touchend: this._touchState= WAITING_FOR_TARGET_LONG_TOUCH_END  -> WAITING_FOR_ORIGIN_TOUCH_START")
+                    }
+                    enableCameraNavigation();
+                    break;
+            }
+
+        }, {passive: true});
+
+        this._active = true;
+    }
+
+    /**
+     * Deactivates this IssuesTouchControl, making it unresponsive to input.
+     *
+     * Destroys any {@link DistanceMeasurement} under construction.
+     */
+    deactivate() {
+        if (!this._active) {
+            return;
+        }
+        if (this.plugin.pointerLens) {
+            this.plugin.pointerLens.visible = false;
+        }
+        this.reset();
+        const canvas = this.plugin.viewer.scene.canvas.canvas;
+        canvas.removeEventListener("touchstart", this._onCanvasTouchStart);
+        canvas.removeEventListener("touchend", this._onCanvasTouchEnd);
+        if (this._currentDistanceMeasurement) {
+            this.issuesPlugin.fire("measurementCancel", this._currentDistanceMeasurement);
+            this._currentDistanceMeasurement.destroy();
+            this._currentDistanceMeasurement = null;
+        }
+        this._active = false;
+        this.plugin.viewer.cameraControl.active = true;
+    }
+
+    /**
+     * Resets this IssuesTouchControl.
+     *
+     * Destroys any {@link DistanceMeasurement} under construction.
+     *
+     * Does nothing if the IssuesTouchControl is not active.
+     */
+    reset() {
+        if (!this._active) {
+            return;
+        }
+        if (this._currentDistanceMeasurement) {
+            this.issuesPlugin.fire("measurementCancel", this._currentDistanceMeasurement);
+            this._currentDistanceMeasurement.destroy();
+            this._currentDistanceMeasurement = null;
+        }
+        this._mouseState = WAITING_FOR_ORIGIN_TOUCH_START;
+    }
+
+    /**
+     * Gets the {@link DistanceMeasurement} under construction by this IssuesTouchControl, if any.
+     *
+     * @returns {null|DistanceMeasurement}
+     */
+    get currentMeasurement() {
+        return this._currentDistanceMeasurement;
+    }
+
+    /**
+     * Destroys this IssuesTouchControl.
+     */
+    destroy() {
+        this.deactivate();
+        super.destroy();
+    }
+}
+
 exports.AlphaFormat = AlphaFormat;
 exports.AmbientLight = AmbientLight;
 exports.AngleMeasurementEditMouseControl = AngleMeasurementEditMouseControl;
@@ -137230,6 +139173,10 @@ exports.IFCOpenShellDefaultDataSource = IFCOpenShellDefaultDataSource;
 exports.IFCOpenShellLoaderPlugin = IFCOpenShellLoaderPlugin;
 exports.ImagePlane = ImagePlane;
 exports.IntType = IntType;
+exports.IssuesControl = IssuesControl;
+exports.IssuesMouseControl = IssuesMouseControl;
+exports.IssuesPlugin = IssuesPlugin;
+exports.IssuesTouchControl = IssuesTouchControl;
 exports.JPEGMediaType = JPEGMediaType;
 exports.KTX2TextureTranscoder = KTX2TextureTranscoder;
 exports.LASLoaderPlugin = LASLoaderPlugin;

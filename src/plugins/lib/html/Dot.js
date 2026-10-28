@@ -11,6 +11,7 @@ class Dot {
 
         this._dot = document.createElement('div');
         this._dot.className += this._dot.className ? ' viewer-ruler-dot' : 'viewer-ruler-dot';
+        this._dot.id += cfg.id || '';
 
         this._dotClickable = document.createElement('div');
         this._dotClickable.className += this._dotClickable.className ? ' viewer-ruler-dot-clickable' : 'viewer-ruler-dot-clickable';
@@ -24,17 +25,17 @@ class Dot {
         dotStyle.border = "solid 2px white";
         dotStyle.background = "lightgreen";
         dotStyle.position = "absolute";
-        dotStyle["z-index"] = cfg.zIndex === undefined ? "40000005" : cfg.zIndex ;
-        dotStyle.width = 8 + "px";
-        dotStyle.height = 8 + "px";
+        dotStyle["z-index"] = cfg.zIndex === undefined ? "40000005" : cfg.zIndex;
+        dotStyle.width = cfg.isIssue ? 18 + 'px' : 8 + 'px';
+        dotStyle.height = cfg.isIssue ? 18 + 'px' : 8 + 'px';
         dotStyle.visibility = this._visible ? "visible" : "hidden";
         dotStyle.top = 0 + "px";
         dotStyle.left = 0 + "px";
         dotStyle["box-shadow"] = "0 2px 5px 0 #182A3D;";
         dotStyle["opacity"] = 1.0;
-        dotStyle["pointer-events"] = "none";
+        dotStyle['pointer-events'] = cfg.isIssue ? 'auto' : 'none';
         if (cfg.onContextMenu) {
-          //  dotStyle["cursor"] = "context-menu";
+            //  dotStyle["cursor"] = "context-menu";
         }
         parentElement.appendChild(dot);
 
@@ -51,14 +52,45 @@ class Dot {
         dotClickableStyle.left = 0 + "px";
         dotClickableStyle["opacity"] = 0.0;
         dotClickableStyle["pointer-events"] = "none";
+        //themmoi2612
+        if (cfg.isPoint) {
+            this.origin = cfg.origin || new Float64Array(3);
+
+            this._tooltip = document.createElement('div');
+            this._tooltip.className = 'tooltip';
+            this._tooltip.style.position = 'absolute';
+            this._tooltip.style.backgroundColor = 'white';
+            this._tooltip.style.border = '1px solid #ccc';
+            this._tooltip.style.borderRadius = '5px';
+            this._tooltip.style.padding = '5px';
+            this._tooltip.style.visibility = 'hidden';
+            this._tooltip.style.fontSize = '13px';
+            parentElement.appendChild(this._tooltip);
+
+            dot.addEventListener('mouseenter', this.showTooltip.bind(this));
+            dot.addEventListener('mouseleave', this.hideTooltip.bind(this));
+        }
         if (cfg.onContextMenu) {
-          //  dotClickableStyle["cursor"] = "context-menu";
+            //  dotClickableStyle["cursor"] = "context-menu";
         }
         parentElement.appendChild(dotClickable);
 
         dotClickable.addEventListener('click', (event) => {
             parentElement.dispatchEvent(new MouseEvent('mouseover', event));
         });
+
+        if (cfg.isIssue) {
+            dot.addEventListener('click', (event) => {
+                console.log('click');
+                cfg.getId();
+                parentElement.dispatchEvent(new MouseEvent('mouseover', event));
+            });
+            dot.addEventListener('mousemove', (event) => {
+                console.log('mousemove');
+                cfg.onMouseMove(event);
+                parentElement.dispatchEvent(new MouseEvent('mouseover', event));
+            });
+        }
 
         if (cfg.onMouseOver) {
             dotClickable.addEventListener('mouseover', (event) => {
@@ -120,12 +152,24 @@ class Dot {
                 cfg.onContextMenu(event, this);
             }
             addContextMenuListener(dotClickable, contextMenuCallback);
-            
+
         }
 
         this.setPos(cfg.x || 0, cfg.y || 0);
         this.setFillColor(cfg.fillColor);
         this.setBorderColor(cfg.borderColor);
+    }
+
+    //themmoi2012
+    showTooltip(event) {
+        this._tooltip.innerHTML = `x: ${this.origin[0].toFixed(2)}m | y:${-1 * this.origin[2].toFixed(2)}m | z: ${this.origin[1].toFixed(2)}m`;
+        this._tooltip.style.left = event.clientX + 'px';
+        this._tooltip.style.top = event.clientY + 'px';
+        this._tooltip.style.visibility = 'visible';
+    }
+
+    hideTooltip() {
+        this._tooltip.style.visibility = 'hidden';
     }
 
     setPos(x, y) {
@@ -187,7 +231,7 @@ class Dot {
             this._dot.classList.remove(this._highlightClass);
         }
     }
-    
+
     destroy() {
         this.setVisible(false);
         if (this._dot.parentElement) {
@@ -199,4 +243,4 @@ class Dot {
     }
 }
 
-export {Dot};
+export { Dot };
