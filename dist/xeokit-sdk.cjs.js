@@ -1,11 +1,11 @@
 /**
  * xeokit-sdk v2.6.112
- *  Commit: bd51b039b6d2f2d14e3c6c377bb56aa7bfc0300d
- *  Built: 2026-10-28T06:51:48.326Z
+ *  Commit: 378319854471cd742b053c9910128938b68961da
+ *  Built: 2026-11-02T07:52:51.621Z
  */
 
 if (typeof window !== 'undefined') {
-    window.__XEOKIT__ = { version: '2.6.112', commit: 'bd51b039b6d2f2d14e3c6c377bb56aa7bfc0300d', built: '2026-10-28T06:51:48.326Z' };
+    window.__XEOKIT__ = { version: '2.6.112', commit: '378319854471cd742b053c9910128938b68961da', built: '2026-11-02T07:52:51.621Z' };
 }
 
 'use strict';
@@ -363,7 +363,7 @@ class ContextMenu {
         this._eventSubs = {};
 
         if (cfg.hideOnMouseDown !== false) {
-            this._parentNode.addEventListener("mousedown", (event) => {
+            this._parentNode.addEventListener("mousedown", this._onMouseDown = (event) => {
                 if (!event.target.classList.contains("xeokit-context-menu-item")) {
                     this.hide();
                 }
@@ -556,6 +556,16 @@ class ContextMenu {
      */
     destroy() {
         this._context = null;
+        if (this._parentNode) {
+            if (this._onMouseDown) {
+                this._parentNode.removeEventListener("mousedown", this._onMouseDown);
+                this._onMouseDown = null;
+            }
+            if (this._canvasTouchStartHandler) {
+                this._parentNode.removeEventListener("touchstart", this._canvasTouchStartHandler);
+                this._canvasTouchStartHandler = null;
+            }
+        }
         this._clear();
         if (this._id !== null) {
             idMap.removeItem(this._id);
@@ -700,26 +710,20 @@ class ContextMenu {
                         if (itemSubMenu) {
 
                             html.push(
-                                '<li id="' + item.id + '" class="xeokit-context-menu-item xeokit-context-menu-submenu">' +
+                                '<li id="' + item.id + '" class="xeokit-context-menu-item xeokit-context-menu-submenu" style="' +
+                                ((groupIdx === groupLen - 1) || ((j < lenj - 1)) ? 'border-bottom: 0' : 'border-bottom: 1px solid black') +
+                                '">' +
                                 actionTitle +
                                 '</li>');
-                            if (!((groupIdx === groupLen - 1) || (j < lenj - 1))) {
-                                html.push(
-                                    '<li id="' + item.id + '" class="xeokit-context-menu-item-separator"></li>'
-                                );
-                            }
 
                         } else {
 
                             html.push(
-                                '<li id="' + item.id + '" class="xeokit-context-menu-item">' +
+                                '<li id="' + item.id + '" class="xeokit-context-menu-item" style="' +
+                                ((groupIdx === groupLen - 1) || ((j < lenj - 1)) ? 'border-bottom: 0' : 'border-bottom: 1px solid black') +
+                                '">' +
                                 actionTitle +
                                 '</li>');
-                            if (!((groupIdx === groupLen - 1) || (j < lenj - 1))) {
-                                html.push(
-                                    '<li id="' + item.id + '" class="xeokit-context-menu-item-separator"></li>'
-                                );
-                            }
                         }
                     }
                 }
@@ -734,10 +738,12 @@ class ContextMenu {
 
         menu.menuElement = menuElement;
 
-        const closeMenuElement = document.getElementById(`closeMenu${menu.id}`);
-        closeMenuElement.addEventListener('click', () => {
-            menuElement.style.display = 'none';
-        });
+        const closeMenuElement = menuElement.querySelector(`#closeMenu${menu.id}`);
+        if (closeMenuElement) {
+            closeMenuElement.addEventListener('click', () => {
+                this.hide();
+            });
+        }
 
         menuElement.style["border-radius"] = 4 + "px";
         menuElement.style.display = 'none';
@@ -769,7 +775,7 @@ class ContextMenu {
                         const item = groupItems[j];
                         const itemSubMenu = item.subMenu;
 
-                        item.itemElement = this._parentNode.querySelector(`#${item.id}`);
+                        item.itemElement = menuElement.querySelector(`#${item.id}`);
 
                         if (!item.itemElement) {
                             console.error("ContextMenu item element not found: " + item.id);
